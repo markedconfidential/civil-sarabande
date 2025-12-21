@@ -71,6 +71,16 @@ export interface GameState {
   player1PotCoins: number;
   /** Player 2's coins in the pot */
   player2PotCoins: number;
+  /** Whether player 1 has made their bet this betting round */
+  player1BetMade: boolean;
+  /** Whether player 2 has made their bet this betting round */
+  player2BetMade: boolean;
+  /** Last matched pot amount (when both players have equal pot coins) */
+  settledPotCoins: number;
+  /** Whether player 1 has signaled ready to end the round */
+  player1EndedRound: boolean;
+  /** Whether player 2 has signaled ready to end the round */
+  player2EndedRound: boolean;
   /** Current round number (starts at 1) */
   roundNumber: number;
   /** Stake amount in smallest currency unit */
@@ -93,5 +103,33 @@ export const GAME_CONSTANTS = {
   STARTING_COINS: 100,
   /** Number of move phases per round */
   MOVES_PER_ROUND: 3,
+  /** Base ante for round 1 */
+  ANTE_BASE: 1,
+  /** Ante increase per round */
+  ANTE_INCREASE: 1,
+  /** Base penalty for leaving mid-game */
+  LEAVE_PENALTY_BASE: 6,
+  /** Penalty increase per round */
+  LEAVE_PENALTY_INCREASE: 0.5,
 } as const;
+
+/**
+ * Calculate the ante for a given round number.
+ */
+export function getAnte(roundNumber: number): number {
+  return (
+    GAME_CONSTANTS.ANTE_BASE +
+    Math.floor(GAME_CONSTANTS.ANTE_INCREASE * (roundNumber - 1))
+  );
+}
+
+/**
+ * Calculate the leave penalty for a given round number.
+ */
+export function getLeavePenalty(roundNumber: number): number {
+  return (
+    GAME_CONSTANTS.LEAVE_PENALTY_BASE +
+    Math.floor(GAME_CONSTANTS.LEAVE_PENALTY_INCREASE * (roundNumber - 1))
+  );
+}
 
