@@ -1,0 +1,6 @@
+# Bun configuration for civil-sarabande
+
+[install]
+# Use exact versions for reproducibility
+exact = true
+
