@@ -3,34 +3,168 @@
  * Entry point for the game server
  */
 
+import {
+  handleCreateGame,
+  handleListWaitingGames,
+  handleGetGame,
+  handleJoinGame,
+  handleMakeMove,
+  handleMakeBet,
+  handleFold,
+  handleRevealMove,
+  handleEndRound,
+  handleNextRound,
+  handleLeaveGame,
+} from "./api/routes";
+
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
 console.log("Civil Sarabande server starting...");
 
 const server = Bun.serve({
   port: PORT,
-  fetch(req) {
+
+  async fetch(req) {
     const url = new URL(req.url);
+    const { pathname } = url;
+    const method = req.method;
 
-    // Health check endpoint
-    if (url.pathname === "/health") {
-      return Response.json({ status: "ok", timestamp: Date.now() });
+    // CORS headers for development
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+
+    // Handle preflight requests
+    if (method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
     }
 
-    // API info
-    if (url.pathname === "/") {
-      return Response.json({
-        name: "Civil Sarabande API",
-        version: "0.0.1",
-        endpoints: {
-          health: "/health",
-        },
+    try {
+      let response: Response;
+
+      // Health check endpoint
+      if (pathname === "/health") {
+        response = Response.json({ status: "ok", timestamp: Date.now() });
+      }
+      // API info
+      else if (pathname === "/" && method === "GET") {
+        response = Response.json({
+          name: "Civil Sarabande API",
+          version: "0.1.0",
+          endpoints: {
+            health: "GET /health",
+            createGame: "POST /games",
+            listWaitingGames: "GET /games/waiting",
+            getGame: "GET /games/:id?playerId=xxx",
+            joinGame: "POST /games/:id/join",
+            makeMove: "POST /games/:id/move",
+            makeBet: "POST /games/:id/bet",
+            fold: "POST /games/:id/fold",
+            reveal: "POST /games/:id/reveal",
+            endRound: "POST /games/:id/end-round",
+            nextRound: "POST /games/:id/next-round",
+            leaveGame: "POST /games/:id/leave",
+          },
+        });
+      }
+      // List waiting games
+      else if (pathname === "/games/waiting" && method === "GET") {
+        response = handleListWaitingGames();
+      }
+      // Create game
+      else if (pathname === "/games" && method === "POST") {
+        response = await handleCreateGame(req);
+      }
+      // Game-specific routes
+      else if (pathname.startsWith("/games/")) {
+        // Get game state
+        if (method === "GET" && pathname.match(/^\/games\/[^/]+$/)) {
+          const playerId = url.searchParams.get("playerId");
+          response = handleGetGame(pathname, playerId);
+        }
+        // Join game
+        else if (method === "POST" && pathname.endsWith("/join")) {
+          response = await handleJoinGame(req, pathname);
+        }
+        // Make move
+        else if (method === "POST" && pathname.endsWith("/move")) {
+          response = await handleMakeMove(req, pathname);
+        }
+        // Make bet
+        else if (method === "POST" && pathname.endsWith("/bet")) {
+          response = await handleMakeBet(req, pathname);
+        }
+        // Fold
+        else if (method === "POST" && pathname.endsWith("/fold")) {
+          response = await handleFold(req, pathname);
+        }
+        // Reveal move
+        else if (method === "POST" && pathname.endsWith("/reveal")) {
+          response = await handleRevealMove(req, pathname);
+        }
+        // End round
+        else if (method === "POST" && pathname.endsWith("/end-round")) {
+          response = await handleEndRound(req, pathname);
+        }
+        // Next round
+        else if (method === "POST" && pathname.endsWith("/next-round")) {
+          response = await handleNextRound(req, pathname);
+        }
+        // Leave game
+        else if (method === "POST" && pathname.endsWith("/leave")) {
+          response = await handleLeaveGame(req, pathname);
+        }
+        // Unknown game route
+        else {
+          response = Response.json(
+            { error: "Not found" },
+            { status: 404 }
+          );
+        }
+      }
+      // Unknown route
+      else {
+        response = Response.json(
+          { error: "Not found" },
+          { status: 404 }
+        );
+      }
+
+      // Add CORS headers to response
+      const newHeaders = new Headers(response.headers);
+      Object.entries(corsHeaders).forEach(([key, value]) => {
+        newHeaders.set(key, value);
       });
-    }
 
-    return new Response("Not Found", { status: 404 });
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: newHeaders,
+      });
+    } catch (err) {
+      console.error("Unhandled error:", err);
+      return Response.json(
+        { error: "Internal server error" },
+        { status: 500, headers: corsHeaders }
+      );
+    }
   },
 });
 
 console.log(`Server running at http://localhost:${server.port}`);
-
+console.log("Available endpoints:");
+console.log("  GET  /health");
+console.log("  GET  /");
+console.log("  POST /games");
+console.log("  GET  /games/waiting");
+console.log("  GET  /games/:id?playerId=xxx");
+console.log("  POST /games/:id/join");
+console.log("  POST /games/:id/move");
+console.log("  POST /games/:id/bet");
+console.log("  POST /games/:id/fold");
+console.log("  POST /games/:id/reveal");
+console.log("  POST /games/:id/end-round");
+console.log("  POST /games/:id/next-round");
+console.log("  POST /games/:id/leave");
