@@ -22,10 +22,14 @@ import {
   onClose,
   type ConnectionData,
 } from "./websocket";
+import { getDatabase, closeDatabase } from "./db/database";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
 console.log("Civil Sarabande server starting...");
+
+// Initialize database
+getDatabase();
 
 const server = Bun.serve<ConnectionData>({
   port: PORT,
@@ -204,3 +208,16 @@ console.log("  POST /games/:id/reveal");
 console.log("  POST /games/:id/end-round");
 console.log("  POST /games/:id/next-round");
 console.log("  POST /games/:id/leave");
+
+// Graceful shutdown
+process.on("SIGINT", () => {
+  console.log("\nShutting down gracefully...");
+  closeDatabase();
+  process.exit(0);
+});
+
+process.on("SIGTERM", () => {
+  console.log("\nShutting down gracefully...");
+  closeDatabase();
+  process.exit(0);
+});

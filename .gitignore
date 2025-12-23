@@ -30,6 +30,12 @@ coverage/
 *.log
 npm-debug.log*
 
+# Database
+data/
+*.db
+*.db-shm
+*.db-wal
+
 # TypeScript
 *.tsbuildinfo
 
