@@ -16,15 +16,21 @@ import {
   handleNextRound,
   handleLeaveGame,
 } from "./api/routes";
+import {
+  onOpen,
+  onMessage,
+  onClose,
+  type ConnectionData,
+} from "./websocket";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
 console.log("Civil Sarabande server starting...");
 
-const server = Bun.serve({
+const server = Bun.serve<ConnectionData>({
   port: PORT,
 
-  async fetch(req) {
+  async fetch(req, server) {
     const url = new URL(req.url);
     const { pathname } = url;
     const method = req.method;
@@ -41,6 +47,27 @@ const server = Bun.serve({
       return new Response(null, { headers: corsHeaders });
     }
 
+    // Handle WebSocket upgrade requests
+    if (pathname === "/ws") {
+      const upgraded = server.upgrade(req, {
+        data: {
+          playerId: null,
+          subscribedGames: new Set<string>(),
+        },
+      });
+
+      if (upgraded) {
+        // Upgrade successful, Bun will call the websocket handlers
+        return undefined;
+      }
+
+      // Upgrade failed
+      return Response.json(
+        { error: "WebSocket upgrade failed" },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
     try {
       let response: Response;
 
@@ -52,9 +79,10 @@ const server = Bun.serve({
       else if (pathname === "/" && method === "GET") {
         response = Response.json({
           name: "Civil Sarabande API",
-          version: "0.1.0",
+          version: "0.2.0",
           endpoints: {
             health: "GET /health",
+            websocket: "WS /ws",
             createGame: "POST /games",
             listWaitingGames: "GET /games/waiting",
             getGame: "GET /games/:id?playerId=xxx",
@@ -151,12 +179,20 @@ const server = Bun.serve({
       );
     }
   },
+
+  // WebSocket handlers
+  websocket: {
+    open: onOpen,
+    message: onMessage,
+    close: onClose,
+  },
 });
 
 console.log(`Server running at http://localhost:${server.port}`);
 console.log("Available endpoints:");
 console.log("  GET  /health");
 console.log("  GET  /");
+console.log("  WS   /ws");
 console.log("  POST /games");
 console.log("  GET  /games/waiting");
 console.log("  GET  /games/:id?playerId=xxx");

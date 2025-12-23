@@ -17,6 +17,11 @@ import {
   startNextRound as startNextRoundState,
   leaveGame as leaveGameState,
 } from "../game/gameState";
+import {
+  broadcastGameUpdate,
+  notifyPlayerJoined,
+  notifyPlayerLeft,
+} from "../websocket/gameNotifier";
 
 /** In-memory storage for all active games */
 const games = new Map<string, GameState>();
@@ -79,6 +84,10 @@ export function joinGame(gameId: string, player: Player): GameState {
 
   const updated = joinGameState(game, player);
   games.set(gameId, updated);
+
+  // Notify via WebSocket
+  notifyPlayerJoined(updated, player);
+
   return updated;
 }
 
@@ -98,6 +107,10 @@ export function makeMove(
 
   const updated = makeMoveState(game, playerId, selfColumn, otherRow);
   games.set(gameId, updated);
+
+  // Notify via WebSocket
+  broadcastGameUpdate(updated, "move");
+
   return updated;
 }
 
@@ -116,6 +129,10 @@ export function makeBet(
 
   const updated = makeBetState(game, playerId, amount);
   games.set(gameId, updated);
+
+  // Notify via WebSocket
+  broadcastGameUpdate(updated, "bet");
+
   return updated;
 }
 
@@ -130,6 +147,10 @@ export function foldBet(gameId: string, playerId: string): GameState {
 
   const updated = foldBetState(game, playerId);
   games.set(gameId, updated);
+
+  // Notify via WebSocket
+  broadcastGameUpdate(updated, "fold");
+
   return updated;
 }
 
@@ -148,6 +169,10 @@ export function makeRevealMove(
 
   const updated = makeRevealMoveState(game, playerId, revealColumn);
   games.set(gameId, updated);
+
+  // Notify via WebSocket
+  broadcastGameUpdate(updated, "reveal");
+
   return updated;
 }
 
@@ -162,6 +187,10 @@ export function endRound(gameId: string, playerId: string): GameState {
 
   const updated = endRoundState(game, playerId);
   games.set(gameId, updated);
+
+  // Notify via WebSocket
+  broadcastGameUpdate(updated, "endRound");
+
   return updated;
 }
 
@@ -176,6 +205,10 @@ export function startNextRound(gameId: string): GameState {
 
   const updated = startNextRoundState(game);
   games.set(gameId, updated);
+
+  // Notify via WebSocket
+  broadcastGameUpdate(updated, "nextRound");
+
   return updated;
 }
 
@@ -190,6 +223,9 @@ export function leaveGame(gameId: string, playerId: string): GameState {
 
   const updated = leaveGameState(game, playerId);
   games.set(gameId, updated);
+
+  // Notify via WebSocket
+  notifyPlayerLeft(updated, playerId);
 
   // Optionally clean up ended games after some time
   if (updated.phase === "ended") {

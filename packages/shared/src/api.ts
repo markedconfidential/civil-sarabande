@@ -159,3 +159,111 @@ export interface SuccessResponse {
   game: GameStateView;
 }
 
+// ============================================================================
+// WebSocket Message Types
+// ============================================================================
+
+/** Client -> Server: Subscribe to a game */
+export interface WSSubscribeMessage {
+  type: "subscribe";
+  /** Player ID subscribing */
+  playerId: string;
+  /** Game ID to subscribe to */
+  gameId: string;
+}
+
+/** Client -> Server: Unsubscribe from a game */
+export interface WSUnsubscribeMessage {
+  type: "unsubscribe";
+  /** Player ID unsubscribing */
+  playerId: string;
+  /** Game ID to unsubscribe from */
+  gameId: string;
+}
+
+/** Client -> Server: Ping to keep connection alive */
+export interface WSPingMessage {
+  type: "ping";
+}
+
+/** All possible client -> server messages */
+export type WSClientMessage =
+  | WSSubscribeMessage
+  | WSUnsubscribeMessage
+  | WSPingMessage;
+
+/** Server -> Client: Subscription confirmed */
+export interface WSSubscribedMessage {
+  type: "subscribed";
+  /** Game ID subscribed to */
+  gameId: string;
+  /** Current game state */
+  game: GameStateView;
+}
+
+/** Server -> Client: Unsubscription confirmed */
+export interface WSUnsubscribedMessage {
+  type: "unsubscribed";
+  /** Game ID unsubscribed from */
+  gameId: string;
+}
+
+/** Server -> Client: Game state update */
+export interface WSGameStateUpdateMessage {
+  type: "gameStateUpdate";
+  /** Game ID that was updated */
+  gameId: string;
+  /** Updated game state (player-specific view) */
+  game: GameStateView;
+  /** What action triggered this update */
+  action: string;
+}
+
+/** Server -> Client: Player joined the game */
+export interface WSPlayerJoinedMessage {
+  type: "playerJoined";
+  /** Game ID */
+  gameId: string;
+  /** Player who joined */
+  player: Player;
+  /** Updated game state */
+  game: GameStateView;
+}
+
+/** Server -> Client: Player left the game */
+export interface WSPlayerLeftMessage {
+  type: "playerLeft";
+  /** Game ID */
+  gameId: string;
+  /** Player who left */
+  playerId: string;
+  /** Updated game state */
+  game: GameStateView;
+}
+
+/** Server -> Client: Error message */
+export interface WSErrorMessage {
+  type: "error";
+  /** Error description */
+  error: string;
+  /** Related game ID (if applicable) */
+  gameId?: string;
+}
+
+/** Server -> Client: Pong response */
+export interface WSPongMessage {
+  type: "pong";
+  /** Server timestamp */
+  timestamp: number;
+}
+
+/** All possible server -> client messages */
+export type WSServerMessage =
+  | WSSubscribedMessage
+  | WSUnsubscribedMessage
+  | WSGameStateUpdateMessage
+  | WSPlayerJoinedMessage
+  | WSPlayerLeftMessage
+  | WSErrorMessage
+  | WSPongMessage;
+
