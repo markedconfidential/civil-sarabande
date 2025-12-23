@@ -5,6 +5,8 @@
  */
 
 import { Database } from "bun:sqlite";
+import { mkdirSync } from "fs";
+import { dirname } from "path";
 import { runMigrations } from "./migrations";
 
 let db: Database | null = null;
@@ -15,25 +17,37 @@ let db: Database | null = null;
  */
 export function getDatabase(): Database {
   if (!db) {
-    const dbPath = process.env.DATABASE_PATH || "data/civil-sarabande.db";
+    // Resolve database path - use absolute path relative to server package
+    let dbPath = process.env.DATABASE_PATH;
+    
+    if (!dbPath) {
+      // Get the server package directory (go up from src/db to server package root)
+      const serverDir = import.meta.dir + "/../..";
+      dbPath = `${serverDir}/data/civil-sarabande.db`;
+    }
     
     // Ensure the directory exists
-    const dbDir = dbPath.substring(0, dbPath.lastIndexOf("/"));
-    if (dbDir) {
-      try {
-        Bun.mkdir(dbDir, { recursive: true });
-      } catch (err) {
-        // Directory might already exist, ignore
-      }
+    const dbDir = dirname(dbPath);
+    try {
+      mkdirSync(dbDir, { recursive: true });
+      console.log(`Database directory created/verified: ${dbDir}`);
+    } catch (err) {
+      console.error(`Failed to create database directory: ${dbDir}`, err);
+      throw new Error(`Cannot create database directory: ${dbDir}`);
     }
 
-    db = new Database(dbPath);
-    db.run("PRAGMA foreign_keys = ON"); // Enable foreign key constraints
-    
-    // Run migrations
-    runMigrations(db);
-    
-    console.log(`Database initialized at ${dbPath}`);
+    try {
+      db = new Database(dbPath);
+      db.run("PRAGMA foreign_keys = ON"); // Enable foreign key constraints
+      
+      // Run migrations
+      runMigrations(db);
+      
+      console.log(`Database initialized at ${dbPath}`);
+    } catch (err) {
+      console.error(`Failed to open database at ${dbPath}:`, err);
+      throw err;
+    }
   }
   
   return db;
