@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@civil-sarabande/shared": "workspace:*"
+    "@civil-sarabande/shared": "workspace:*",
+    "@privy-io/server-auth": "^1.16.0",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

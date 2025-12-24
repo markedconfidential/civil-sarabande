@@ -2,6 +2,7 @@
  * API Routes
  *
  * REST API handlers for game operations.
+ * All game routes require Privy authentication.
  */
 
 import type {
@@ -21,6 +22,9 @@ import type {
   ErrorResponse,
 } from "@civil-sarabande/shared";
 import * as store from "../store/gameStore";
+import { requireAuth, unauthorizedResponse } from "./auth";
+import { getDatabase } from "../db/database";
+import * as userRepo from "../db/userRepository";
 
 // ============================================================================
 // Helpers
@@ -113,20 +117,42 @@ function extractGameId(pathname: string): string | null {
 
 /**
  * POST /games - Create a new game
+ * Requires authentication. Creates game with authenticated user.
  */
 export async function handleCreateGame(req: Request): Promise<Response> {
   try {
-    const body = await parseBody<CreateGameRequest>(req);
-
-    if (!body.player || !body.player.id) {
-      return errorResponse("Player with id is required");
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
     }
+    const { userId } = authResult;
+
+    // Get user from database
+    const db = getDatabase();
+    const user = userRepo.getUserByPrivyId(db, userId);
+    if (!user) {
+      return errorResponse("User not found. Please complete onboarding.", 400);
+    }
+    if (!user.username) {
+      return errorResponse("Please set a username before playing.", 400);
+    }
+
+    const body = await parseBody<{ stake: number }>(req);
+
     if (typeof body.stake !== "number" || body.stake <= 0) {
       return errorResponse("Valid stake amount is required");
     }
 
-    const game = store.createGame(body.player, body.stake);
-    const view = toGameStateView(game, body.player.id);
+    // Create player object from user
+    const player = {
+      id: userId,
+      name: user.username,
+      address: user.walletAddress ?? undefined,
+    };
+
+    const game = store.createGame(player, body.stake);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<CreateGameResponse>({ game: view }, 201);
   } catch (err) {
@@ -154,11 +180,19 @@ export function handleListWaitingGames(): Response {
 
 /**
  * GET /games/:id - Get game state
+ * Requires authentication. Returns game state for authenticated user.
  */
-export function handleGetGame(
-  pathname: string,
-  playerId: string | null
-): Response {
+export async function handleGetGame(
+  req: Request,
+  pathname: string
+): Promise<Response> {
+  // Require authentication
+  const authResult = await requireAuth(req);
+  if ("error" in authResult) {
+    return authResult.error;
+  }
+  const { userId } = authResult;
+
   const gameId = extractGameId(pathname);
   if (!gameId) {
     return errorResponse("Invalid game ID", 400);
@@ -169,40 +203,55 @@ export function handleGetGame(
     return errorResponse("Game not found", 404);
   }
 
-  if (!playerId) {
-    return errorResponse("Player ID required (use ?playerId=xxx)", 400);
-  }
-
   // Verify player is in this game
-  if (game.player1.id !== playerId && game.player2?.id !== playerId) {
+  if (game.player1.id !== userId && game.player2?.id !== userId) {
     return errorResponse("Player not in this game", 403);
   }
 
-  const view = toGameStateView(game, playerId);
+  const view = toGameStateView(game, userId);
   return jsonResponse({ game: view });
 }
 
 /**
  * POST /games/:id/join - Join an existing game
+ * Requires authentication. Joins game as authenticated user.
  */
 export async function handleJoinGame(
   req: Request,
   pathname: string
 ): Promise<Response> {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
+    }
+    const { userId } = authResult;
+
+    // Get user from database
+    const db = getDatabase();
+    const user = userRepo.getUserByPrivyId(db, userId);
+    if (!user) {
+      return errorResponse("User not found. Please complete onboarding.", 400);
+    }
+    if (!user.username) {
+      return errorResponse("Please set a username before playing.", 400);
+    }
+
     const gameId = extractGameId(pathname);
     if (!gameId) {
       return errorResponse("Invalid game ID", 400);
     }
 
-    const body = await parseBody<JoinGameRequest>(req);
+    // Create player object from user
+    const player = {
+      id: userId,
+      name: user.username,
+      address: user.walletAddress ?? undefined,
+    };
 
-    if (!body.player || !body.player.id) {
-      return errorResponse("Player with id is required");
-    }
-
-    const game = store.joinGame(gameId, body.player);
-    const view = toGameStateView(game, body.player.id);
+    const game = store.joinGame(gameId, player);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<SuccessResponse>({ success: true, game: view });
   } catch (err) {
@@ -212,28 +261,33 @@ export async function handleJoinGame(
 
 /**
  * POST /games/:id/move - Make a move
+ * Requires authentication.
  */
 export async function handleMakeMove(
   req: Request,
   pathname: string
 ): Promise<Response> {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
+    }
+    const { userId } = authResult;
+
     const gameId = extractGameId(pathname);
     if (!gameId) {
       return errorResponse("Invalid game ID", 400);
     }
 
-    const body = await parseBody<MakeMoveRequest>(req);
+    const body = await parseBody<{ selfColumn: number; otherRow: number }>(req);
 
-    if (!body.playerId) {
-      return errorResponse("playerId is required");
-    }
     if (typeof body.selfColumn !== "number" || typeof body.otherRow !== "number") {
       return errorResponse("selfColumn and otherRow are required");
     }
 
-    const game = store.makeMove(gameId, body.playerId, body.selfColumn, body.otherRow);
-    const view = toGameStateView(game, body.playerId);
+    const game = store.makeMove(gameId, userId, body.selfColumn, body.otherRow);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<SuccessResponse>({ success: true, game: view });
   } catch (err) {
@@ -243,28 +297,33 @@ export async function handleMakeMove(
 
 /**
  * POST /games/:id/bet - Place a bet
+ * Requires authentication.
  */
 export async function handleMakeBet(
   req: Request,
   pathname: string
 ): Promise<Response> {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
+    }
+    const { userId } = authResult;
+
     const gameId = extractGameId(pathname);
     if (!gameId) {
       return errorResponse("Invalid game ID", 400);
     }
 
-    const body = await parseBody<MakeBetRequest>(req);
+    const body = await parseBody<{ amount: number }>(req);
 
-    if (!body.playerId) {
-      return errorResponse("playerId is required");
-    }
     if (typeof body.amount !== "number") {
       return errorResponse("amount is required");
     }
 
-    const game = store.makeBet(gameId, body.playerId, body.amount);
-    const view = toGameStateView(game, body.playerId);
+    const game = store.makeBet(gameId, userId, body.amount);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<SuccessResponse>({ success: true, game: view });
   } catch (err) {
@@ -274,25 +333,27 @@ export async function handleMakeBet(
 
 /**
  * POST /games/:id/fold - Fold current round
+ * Requires authentication.
  */
 export async function handleFold(
   req: Request,
   pathname: string
 ): Promise<Response> {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
+    }
+    const { userId } = authResult;
+
     const gameId = extractGameId(pathname);
     if (!gameId) {
       return errorResponse("Invalid game ID", 400);
     }
 
-    const body = await parseBody<FoldRequest>(req);
-
-    if (!body.playerId) {
-      return errorResponse("playerId is required");
-    }
-
-    const game = store.foldBet(gameId, body.playerId);
-    const view = toGameStateView(game, body.playerId);
+    const game = store.foldBet(gameId, userId);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<SuccessResponse>({ success: true, game: view });
   } catch (err) {
@@ -302,28 +363,33 @@ export async function handleFold(
 
 /**
  * POST /games/:id/reveal - Make reveal move
+ * Requires authentication.
  */
 export async function handleRevealMove(
   req: Request,
   pathname: string
 ): Promise<Response> {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
+    }
+    const { userId } = authResult;
+
     const gameId = extractGameId(pathname);
     if (!gameId) {
       return errorResponse("Invalid game ID", 400);
     }
 
-    const body = await parseBody<RevealMoveRequest>(req);
+    const body = await parseBody<{ revealColumn: number }>(req);
 
-    if (!body.playerId) {
-      return errorResponse("playerId is required");
-    }
     if (typeof body.revealColumn !== "number") {
       return errorResponse("revealColumn is required");
     }
 
-    const game = store.makeRevealMove(gameId, body.playerId, body.revealColumn);
-    const view = toGameStateView(game, body.playerId);
+    const game = store.makeRevealMove(gameId, userId, body.revealColumn);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<SuccessResponse>({ success: true, game: view });
   } catch (err) {
@@ -333,25 +399,27 @@ export async function handleRevealMove(
 
 /**
  * POST /games/:id/end-round - Signal round end
+ * Requires authentication.
  */
 export async function handleEndRound(
   req: Request,
   pathname: string
 ): Promise<Response> {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
+    }
+    const { userId } = authResult;
+
     const gameId = extractGameId(pathname);
     if (!gameId) {
       return errorResponse("Invalid game ID", 400);
     }
 
-    const body = await parseBody<EndRoundRequest>(req);
-
-    if (!body.playerId) {
-      return errorResponse("playerId is required");
-    }
-
-    const game = store.endRound(gameId, body.playerId);
-    const view = toGameStateView(game, body.playerId);
+    const game = store.endRound(gameId, userId);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<SuccessResponse>({ success: true, game: view });
   } catch (err) {
@@ -361,26 +429,27 @@ export async function handleEndRound(
 
 /**
  * POST /games/:id/next-round - Start next round
+ * Requires authentication.
  */
 export async function handleNextRound(
   req: Request,
   pathname: string
 ): Promise<Response> {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
+    }
+    const { userId } = authResult;
+
     const gameId = extractGameId(pathname);
     if (!gameId) {
       return errorResponse("Invalid game ID", 400);
     }
 
-    // Parse body to get playerId for the response view
-    const body = await parseBody<{ playerId: string }>(req);
-
-    if (!body.playerId) {
-      return errorResponse("playerId is required");
-    }
-
     const game = store.startNextRound(gameId);
-    const view = toGameStateView(game, body.playerId);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<SuccessResponse>({ success: true, game: view });
   } catch (err) {
@@ -390,25 +459,27 @@ export async function handleNextRound(
 
 /**
  * POST /games/:id/leave - Leave game
+ * Requires authentication.
  */
 export async function handleLeaveGame(
   req: Request,
   pathname: string
 ): Promise<Response> {
   try {
+    // Require authentication
+    const authResult = await requireAuth(req);
+    if ("error" in authResult) {
+      return authResult.error;
+    }
+    const { userId } = authResult;
+
     const gameId = extractGameId(pathname);
     if (!gameId) {
       return errorResponse("Invalid game ID", 400);
     }
 
-    const body = await parseBody<LeaveGameRequest>(req);
-
-    if (!body.playerId) {
-      return errorResponse("playerId is required");
-    }
-
-    const game = store.leaveGame(gameId, body.playerId);
-    const view = toGameStateView(game, body.playerId);
+    const game = store.leaveGame(gameId, userId);
+    const view = toGameStateView(game, userId);
 
     return jsonResponse<SuccessResponse>({ success: true, game: view });
   } catch (err) {

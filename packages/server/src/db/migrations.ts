@@ -1,6 +1,6 @@
 /**
  * Database Migrations
- * 
+ *
  * Creates and updates the database schema.
  */
 
@@ -10,6 +10,27 @@ import type { Database } from "bun:sqlite";
  * Run all migrations on the database.
  */
 export function runMigrations(db: Database): void {
+  // Create users table (new for Privy integration)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      privy_user_id TEXT PRIMARY KEY,
+      username TEXT UNIQUE,
+      wallet_address TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
+  // Create index on username for uniqueness checks
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)
+  `);
+
+  // Create index on wallet_address for lookups
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_users_wallet_address ON users(wallet_address)
+  `);
+
   // Create games table
   db.exec(`
     CREATE TABLE IF NOT EXISTS games (
@@ -72,23 +93,23 @@ export function runMigrations(db: Database): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_games_phase ON games(phase)
   `);
-  
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_games_player1 ON games(player1_id)
   `);
-  
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_games_player2 ON games(player2_id)
   `);
-  
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_game_history_player1 ON game_history(player1_id)
   `);
-  
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_game_history_player2 ON game_history(player2_id)
   `);
-  
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_game_history_started_at ON game_history(started_at)
   `);

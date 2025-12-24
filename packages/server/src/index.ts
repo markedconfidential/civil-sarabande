@@ -17,6 +17,13 @@ import {
   handleLeaveGame,
 } from "./api/routes";
 import {
+  handleGetCurrentUser,
+  handleSetUsername,
+  handleCheckUsername,
+  handleUpdateWallet,
+} from "./api/userRoutes";
+import { handleGetBalance } from "./api/wallet";
+import {
   onOpen,
   onMessage,
   onClose,
@@ -43,7 +50,7 @@ const server = Bun.serve<ConnectionData>({
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
     };
 
     // Handle preflight requests
@@ -83,13 +90,21 @@ const server = Bun.serve<ConnectionData>({
       else if (pathname === "/" && method === "GET") {
         response = Response.json({
           name: "Civil Sarabande API",
-          version: "0.2.0",
+          version: "0.3.0",
           endpoints: {
             health: "GET /health",
             websocket: "WS /ws",
+            // User management
+            getCurrentUser: "GET /users/me",
+            setUsername: "POST /users/username",
+            checkUsername: "GET /users/username/:username",
+            updateWallet: "POST /users/wallet",
+            // Wallet
+            getBalance: "GET /wallet/balance",
+            // Game management
             createGame: "POST /games",
             listWaitingGames: "GET /games/waiting",
-            getGame: "GET /games/:id?playerId=xxx",
+            getGame: "GET /games/:id",
             joinGame: "POST /games/:id/join",
             makeMove: "POST /games/:id/move",
             makeBet: "POST /games/:id/bet",
@@ -100,6 +115,24 @@ const server = Bun.serve<ConnectionData>({
             leaveGame: "POST /games/:id/leave",
           },
         });
+      }
+      // User routes
+      else if (pathname === "/users/me" && method === "GET") {
+        response = await handleGetCurrentUser(req);
+      } else if (pathname === "/users/username" && method === "POST") {
+        response = await handleSetUsername(req);
+      } else if (
+        pathname.startsWith("/users/username/") &&
+        method === "GET"
+      ) {
+        const username = pathname.substring("/users/username/".length);
+        response = handleCheckUsername(username);
+      } else if (pathname === "/users/wallet" && method === "POST") {
+        response = await handleUpdateWallet(req);
+      }
+      // Wallet balance
+      else if (pathname === "/wallet/balance" && method === "GET") {
+        response = await handleGetBalance(req);
       }
       // List waiting games
       else if (pathname === "/games/waiting" && method === "GET") {
@@ -113,8 +146,7 @@ const server = Bun.serve<ConnectionData>({
       else if (pathname.startsWith("/games/")) {
         // Get game state
         if (method === "GET" && pathname.match(/^\/games\/[^/]+$/)) {
-          const playerId = url.searchParams.get("playerId");
-          response = handleGetGame(pathname, playerId);
+          response = await handleGetGame(req, pathname);
         }
         // Join game
         else if (method === "POST" && pathname.endsWith("/join")) {
@@ -197,9 +229,15 @@ console.log("Available endpoints:");
 console.log("  GET  /health");
 console.log("  GET  /");
 console.log("  WS   /ws");
+console.log("User Management:");
+console.log("  GET  /users/me");
+console.log("  POST /users/username");
+console.log("  GET  /users/username/:username");
+console.log("  POST /users/wallet");
+console.log("Game Management:");
 console.log("  POST /games");
 console.log("  GET  /games/waiting");
-console.log("  GET  /games/:id?playerId=xxx");
+console.log("  GET  /games/:id");
 console.log("  POST /games/:id/join");
 console.log("  POST /games/:id/move");
 console.log("  POST /games/:id/bet");

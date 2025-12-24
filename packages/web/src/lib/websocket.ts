@@ -1,23 +1,33 @@
 /**
  * WebSocket Client
- * 
+ *
  * Manages WebSocket connection to the game server for real-time updates.
  * Uses Svelte stores for reactive state management.
+ * Includes Privy token for authentication.
  */
 
 import { writable, type Writable } from 'svelte/store';
 import type {
 	WSServerMessage,
-	WSClientMessage,
 	WSSubscribedMessage,
 	WSGameStateUpdateMessage,
 	WSPlayerJoinedMessage,
 	WSPlayerLeftMessage,
 	WSErrorMessage,
-	GameStateView,
+	GameStateView
 } from '@civil-sarabande/shared';
+import { getAccessToken } from './privy';
+import { getPrivyUserId } from './auth';
 
 const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
+
+// Extended message type that includes token
+interface WSSubscribeWithToken {
+	type: 'subscribe';
+	playerId: string;
+	gameId: string;
+	token?: string;
+}
 
 // Store for the current game state
 export const gameState: Writable<GameStateView | null> = writable(null);
@@ -99,7 +109,7 @@ function connect(): void {
 /**
  * Send a message to the WebSocket server.
  */
-function sendMessage(message: WSClientMessage): void {
+function sendMessage(message: WSSubscribeWithToken | { type: string; [key: string]: unknown }): void {
 	if (ws?.readyState === WebSocket.OPEN) {
 		ws.send(JSON.stringify(message));
 	} else {
@@ -188,13 +198,25 @@ function handleError(message: WSErrorMessage): void {
 
 /**
  * Subscribe to a game for real-time updates.
- * 
+ * Uses Privy user ID and token for authentication.
+ *
  * @param gameId - The game ID to subscribe to
- * @param playerId - The player ID
+ * @param _playerId - (Deprecated) The player ID - now uses Privy user ID
  */
-export function subscribe(gameId: string, playerId: string): void {
+export async function subscribe(gameId: string, _playerId?: string): Promise<void> {
+	// Get the current user's Privy ID and token
+	const playerId = getPrivyUserId() || _playerId || '';
+	const token = await getAccessToken();
+
 	currentGameId = gameId;
 	currentPlayerId = playerId;
+
+	const subscribeMessage: WSSubscribeWithToken = {
+		type: 'subscribe',
+		playerId,
+		gameId,
+		token: token || undefined
+	};
 
 	if (!ws || ws.readyState !== WebSocket.OPEN) {
 		connect();
@@ -203,11 +225,7 @@ export function subscribe(gameId: string, playerId: string): void {
 			ws.addEventListener(
 				'open',
 				() => {
-					sendMessage({
-						type: 'subscribe',
-						playerId,
-						gameId,
-					});
+					sendMessage(subscribeMessage);
 				},
 				{ once: true }
 			);
@@ -215,11 +233,7 @@ export function subscribe(gameId: string, playerId: string): void {
 		return;
 	}
 
-	sendMessage({
-		type: 'subscribe',
-		playerId,
-		gameId,
-	});
+	sendMessage(subscribeMessage);
 }
 
 /**

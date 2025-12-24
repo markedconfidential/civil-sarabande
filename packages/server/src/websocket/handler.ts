@@ -2,6 +2,7 @@
  * WebSocket Handler
  *
  * Handles WebSocket connections, messages, and lifecycle events.
+ * Supports Privy token authentication.
  */
 
 import type { ServerWebSocket } from "bun";
@@ -23,6 +24,7 @@ import {
 } from "./connectionManager";
 import { toGameStateView } from "./gameNotifier";
 import { getGame } from "../store/gameStore";
+import { verifyPrivyToken } from "../api/auth";
 
 /**
  * Send a message to a WebSocket client.
@@ -56,14 +58,29 @@ function sendError(
 
 /**
  * Handle a subscribe message.
+ * Now accepts an optional token for authentication.
  */
-function handleSubscribe(
+async function handleSubscribe(
   ws: ServerWebSocket<ConnectionData>,
   playerId: string,
-  gameId: string
-): void {
+  gameId: string,
+  token?: string
+): Promise<void> {
+  // If token is provided, verify it and use the verified user ID
+  let verifiedPlayerId = playerId;
+
+  if (token) {
+    const verifiedUser = await verifyPrivyToken(`Bearer ${token}`);
+    if (verifiedUser) {
+      verifiedPlayerId = verifiedUser.userId;
+    } else {
+      sendError(ws, "Invalid authentication token", gameId);
+      return;
+    }
+  }
+
   // Associate connection with player
-  setPlayerConnection(ws, playerId);
+  setPlayerConnection(ws, verifiedPlayerId);
 
   // Get the game
   const game = getGame(gameId);
@@ -73,7 +90,7 @@ function handleSubscribe(
   }
 
   // Verify player is part of this game
-  if (game.player1.id !== playerId && game.player2?.id !== playerId) {
+  if (game.player1.id !== verifiedPlayerId && game.player2?.id !== verifiedPlayerId) {
     sendError(ws, "Player not in this game", gameId);
     return;
   }
@@ -89,11 +106,11 @@ function handleSubscribe(
   const message: WSSubscribedMessage = {
     type: "subscribed",
     gameId,
-    game: toGameStateView(game, playerId),
+    game: toGameStateView(game, verifiedPlayerId),
   };
   sendMessage(ws, message);
 
-  console.log(`Player ${playerId} subscribed to game ${gameId}`);
+  console.log(`Player ${verifiedPlayerId} subscribed to game ${gameId}`);
 }
 
 /**
@@ -168,10 +185,10 @@ export function onOpen(ws: ServerWebSocket<ConnectionData>): void {
 /**
  * Called when a WebSocket message is received.
  */
-export function onMessage(
+export async function onMessage(
   ws: ServerWebSocket<ConnectionData>,
   data: string | Buffer
-): void {
+): Promise<void> {
   const message = parseMessage(data);
 
   if (!message) {
@@ -181,7 +198,13 @@ export function onMessage(
 
   switch (message.type) {
     case "subscribe":
-      handleSubscribe(ws, message.playerId, message.gameId);
+      // The subscribe message may include a token for authentication
+      await handleSubscribe(
+        ws,
+        message.playerId,
+        message.gameId,
+        (message as unknown as { token?: string }).token
+      );
       break;
 
     case "unsubscribe":

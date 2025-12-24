@@ -1,13 +1,23 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { getPlayerId } from '$lib/player';
-	import { getGame, makeMove, makeBet, foldBet, makeRevealMove, endRound, startNextRound } from '$lib/api';
+	import { isAuthenticated, isLoading as authLoading } from '$lib/auth';
+	import {
+		getGame,
+		makeMove,
+		makeBet,
+		foldBet,
+		makeRevealMove,
+		endRound,
+		startNextRound
+	} from '$lib/api';
 	import { subscribe, unsubscribe, gameState, connectionStatus, errorMessage } from '$lib/websocket';
 	import type { GameStateView, GamePhase } from '@civil-sarabande/shared';
 
 	const GAME_CONSTANTS = {
-		BOARD_SIZE: 6,
+		BOARD_SIZE: 6
 	};
 
 	let game: GameStateView | null = null;
@@ -34,9 +44,24 @@
 		}
 	});
 
-	onMount(async () => {
+	onMount(() => {
+		// Wait for auth to load
+		const unsubAuth = authLoading.subscribe((isLoading) => {
+			if (!isLoading) {
+				if (!$isAuthenticated) {
+					goto('/');
+					return;
+				}
+
+				loadGame();
+			}
+		});
+
+		return () => unsubAuth();
+	});
+
+	async function loadGame() {
 		const gameId = $page.params.id;
-		const playerId = getPlayerId();
 
 		if (!gameId) {
 			actionError = 'Invalid game ID';
@@ -54,13 +79,13 @@
 		}
 
 		// Subscribe to WebSocket updates
-		subscribe(gameId, playerId);
-	});
+		await subscribe(gameId);
+	}
 
 	onDestroy(() => {
 		const gameId = $page.params.id;
 		const playerId = getPlayerId();
-		if (gameId && playerId) {
+		if (gameId) {
 			unsubscribe(gameId, playerId);
 		}
 	});
