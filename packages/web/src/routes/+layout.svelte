@@ -4,6 +4,7 @@
 	import { init } from '$lib/websocket';
 	import { PrivyMount } from '$lib/privy';
 	import { isAuthenticated, isLoading } from '$lib/auth';
+	import '../app.css';
 
 	onMount(() => {
 		init();
@@ -15,5 +16,6 @@
 	<PrivyMount />
 {/if}
 
-<slot />
-
+<div class="page">
+	<slot />
+</div>

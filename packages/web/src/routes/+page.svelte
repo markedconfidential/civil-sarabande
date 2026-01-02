@@ -131,206 +131,237 @@
 </svelte:head>
 
 <div class="container">
-	<h1>Civil Sarabande</h1>
-
-	{#if $isLoading || checkingUser}
-		<p>Loading...</p>
-	{:else if !$isAuthenticated}
-		<div class="auth-section">
-			<p>Sign in to create or join games.</p>
-			<button type="button" on:click={login} class="primary-button"> Sign In </button>
-		</div>
-	{:else}
-		<div class="user-info">
-			<p>
-				Signed in as <strong>{$onboardingStatus.username || 'Loading...'}</strong>
-			</p>
-			<button type="button" on:click={handleLogout} class="secondary-button"> Sign Out </button>
-		</div>
-
-		<div class="section">
-			<h2>Create Game</h2>
-			<form on:submit|preventDefault={handleCreateGame}>
-				<div class="input-group">
-					<label for="stake">Stake (USDC):</label>
-					<input
-						type="number"
-						id="stake"
-						bind:value={stake}
-						min="1"
-						required
-						disabled={loading}
-					/>
-				</div>
-				<button type="submit" class="primary-button" disabled={loading}>
-					{loading ? 'Creating...' : 'Create Game'}
-				</button>
-			</form>
-		</div>
-	{/if}
+	<header class="home-header">
+		<h1>Civil Sarabande</h1>
+		<p class="subtitle">A game of numbers, nerves, and nuance</p>
+	</header>
 
 	{#if error}
-		<div class="error">{error}</div>
+		<div class="alert alert--error">{error}</div>
 	{/if}
 
-	<div class="section">
-		<h2>Waiting Games</h2>
-		<button type="button" on:click={refreshWaitingGames} disabled={loading} class="secondary-button">
-			Refresh
-		</button>
-
-		{#if waitingGames.length === 0}
-			<p>No games waiting for players</p>
-		{:else}
-			<div class="games-list">
-				{#each waitingGames as game}
-					<div class="game-card">
-						<div class="game-info">
-							<span class="game-id">{game.gameId.slice(0, 12)}...</span>
-							<span class="player-name">Created by: {game.player1.name || 'Unknown'}</span>
-							<span class="stake">Stake: {game.stake} USDC</span>
-						</div>
-						{#if $isAuthenticated}
-							<button
-								type="button"
-								on:click={() => handleJoinGame(game.gameId)}
-								disabled={loading}
-								class="primary-button"
-							>
-								Join
-							</button>
-						{/if}
-					</div>
-				{/each}
+	{#if $isLoading || checkingUser}
+		<div class="loading">
+			<div class="loading-spinner"></div>
+			<p>Loading...</p>
+		</div>
+	{:else if !$isAuthenticated}
+		<div class="auth-section card">
+			<h2>Welcome</h2>
+			<p>Sign in to create or join games.</p>
+			<button type="button" on:click={login} class="btn-gold btn-lg">Sign In</button>
+		</div>
+	{:else}
+		<div class="user-bar">
+			<div class="user-info">
+				Signed in as <strong>{$onboardingStatus.username || 'Loading...'}</strong>
 			</div>
-		{/if}
+			<button type="button" on:click={handleLogout} class="btn-secondary btn-sm">Sign Out</button>
+		</div>
+
+		<div class="grid grid--2col">
+			<!-- Create Game Panel -->
+			<div class="card">
+				<h2>Create Game</h2>
+				<form on:submit|preventDefault={handleCreateGame}>
+					<div class="form-group">
+						<label for="stake">Stake (USDC)</label>
+						<input
+							type="number"
+							id="stake"
+							bind:value={stake}
+							min="1"
+							required
+							disabled={loading}
+						/>
+					</div>
+					<button type="submit" class="btn-primary btn-lg" disabled={loading}>
+						{loading ? 'Creating...' : 'Create Game'}
+					</button>
+				</form>
+			</div>
+
+			<!-- Waiting Games Panel -->
+			<div class="card">
+				<div class="card-header">
+					<h2>Open Games</h2>
+					<button 
+						type="button" 
+						class="btn-secondary btn-sm" 
+						on:click={refreshWaitingGames} 
+						disabled={loading}
+					>
+						Refresh
+					</button>
+				</div>
+
+				{#if waitingGames.length === 0}
+					<div class="empty-state">
+						<p>No games waiting for players</p>
+						<p class="text-muted">Create a game or check back later</p>
+					</div>
+				{:else}
+					<div class="game-list">
+						{#each waitingGames as game}
+							<div class="game-item">
+								<div class="game-item-info">
+									<span class="game-item-id">{game.gameId.slice(0, 20)}...</span>
+									<span class="game-item-player">
+										Hosted by <strong>{game.player1.name || 'Unknown'}</strong>
+									</span>
+									<span class="game-item-stake">Stake: {game.stake} USDC</span>
+								</div>
+								<button
+									type="button"
+									class="btn-gold"
+									on:click={() => handleJoinGame(game.gameId)}
+									disabled={loading}
+								>
+									Join
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
+	<!-- How to Play -->
+	<div class="card how-to-play">
+		<h2>How to Play</h2>
+		<div class="rules-grid">
+			<div class="rule">
+				<span class="rule-num">1</span>
+				<div>
+					<strong>Choose Columns</strong>
+					<p>Pick columns for yourself to determine which cells score for you.</p>
+				</div>
+			</div>
+			<div class="rule">
+				<span class="rule-num">2</span>
+				<div>
+					<strong>Assign Rows</strong>
+					<p>Assign rows to your opponent, determining which cells score for them.</p>
+				</div>
+			</div>
+			<div class="rule">
+				<span class="rule-num">3</span>
+				<div>
+					<strong>Place Bets</strong>
+					<p>Between each move, bet on your hand. Call, raise, or fold.</p>
+				</div>
+			</div>
+			<div class="rule">
+				<span class="rule-num">4</span>
+				<div>
+					<strong>Reveal & Score</strong>
+					<p>Reveal one column to score. Highest total wins the pot.</p>
+				</div>
+			</div>
+		</div>
 	</div>
 </div>
 
 <style>
-	.container {
-		max-width: 600px;
-		margin: 2rem auto;
-		padding: 1rem;
+	.home-header {
+		text-align: center;
+		margin-bottom: var(--space-2xl);
 	}
 
-	h1 {
-		text-align: center;
-		margin-bottom: 2rem;
+	.subtitle {
+		color: var(--color-text-dim);
+		font-style: italic;
+		font-size: 1.1rem;
 	}
 
 	.auth-section {
 		text-align: center;
-		margin: 2rem 0;
+		max-width: 400px;
+		margin: 0 auto var(--space-2xl) auto;
+	}
+
+	.auth-section p {
+		color: var(--color-text-dim);
+		margin-bottom: var(--space-lg);
+	}
+
+	.user-bar {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-bg-card);
+		border: 1px solid var(--color-cell-border);
+		border-radius: var(--radius-lg);
+		margin-bottom: var(--space-xl);
 	}
 
 	.user-info {
+		color: var(--color-text-dim);
+	}
+
+	.user-info strong {
+		color: var(--color-gold);
+	}
+
+	.card-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 1rem;
-		background: #f5f5f5;
-		border-radius: 8px;
-		margin-bottom: 2rem;
+		margin-bottom: var(--space-md);
 	}
 
-	.section {
-		margin: 2rem 0;
+	.card-header h2 {
+		margin-bottom: 0;
+		border-bottom: none;
+		padding-bottom: 0;
 	}
 
-	.input-group {
-		margin: 1rem 0;
+	.empty-state {
+		text-align: center;
+		padding: var(--space-xl) var(--space-md);
+		color: var(--color-text-dim);
 	}
 
-	label {
-		display: block;
-		margin-bottom: 0.5rem;
-		font-weight: bold;
-	}
-
-	input {
-		width: 100%;
-		padding: 0.75rem;
-		font-size: 1rem;
-		border: 1px solid #ccc;
-		border-radius: 4px;
-		box-sizing: border-box;
-	}
-
-	.primary-button {
-		padding: 0.75rem 1.5rem;
-		font-size: 1rem;
-		font-weight: bold;
-		color: white;
-		background-color: #7c3aed;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-	}
-
-	.primary-button:hover:not(:disabled) {
-		background-color: #6d28d9;
-	}
-
-	.primary-button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.secondary-button {
-		padding: 0.5rem 1rem;
+	.empty-state .text-muted {
+		color: var(--color-text-muted);
 		font-size: 0.875rem;
-		color: #333;
-		background-color: #e5e5e5;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
 	}
 
-	.secondary-button:hover:not(:disabled) {
-		background-color: #d4d4d4;
+	.how-to-play {
+		margin-top: var(--space-lg);
 	}
 
-	.error {
-		color: #ef4444;
-		margin: 1rem 0;
-		padding: 0.75rem;
-		background: #fef2f2;
-		border-radius: 4px;
+	.rules-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: var(--space-lg);
 	}
 
-	.games-list {
-		margin-top: 1rem;
-	}
-
-	.game-card {
+	.rule {
 		display: flex;
-		justify-content: space-between;
+		gap: var(--space-md);
+		align-items: flex-start;
+	}
+
+	.rule-num {
+		flex-shrink: 0;
+		width: 32px;
+		height: 32px;
+		display: flex;
 		align-items: center;
-		padding: 1rem;
-		border: 1px solid #e5e5e5;
-		border-radius: 8px;
-		margin-bottom: 0.5rem;
+		justify-content: center;
+		background: var(--color-primary-dark);
+		color: var(--color-gold);
+		border-radius: 50%;
+		font-family: var(--font-display);
+		font-weight: 700;
 	}
 
-	.game-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.game-id {
-		font-family: monospace;
-		font-size: 0.875rem;
-		color: #666;
-	}
-
-	.player-name {
-		font-weight: bold;
-	}
-
-	.stake {
-		color: #22c55e;
-		font-weight: bold;
+	.rule p {
+		margin: var(--space-xs) 0 0 0;
+		color: var(--color-text-dim);
+		font-size: 0.9rem;
 	}
 </style>

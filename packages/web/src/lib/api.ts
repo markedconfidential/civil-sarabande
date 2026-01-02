@@ -213,3 +213,19 @@ export async function startNextRound(gameId: string): Promise<GameStateView> {
 	return response.game;
 }
 
+/**
+ * Leave a game.
+ * User info is extracted from the authentication token on the server.
+ *
+ * @param gameId - The game ID
+ * @returns The updated game state
+ */
+export async function leaveGame(gameId: string): Promise<GameStateView> {
+	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/leave`, {
+		method: 'POST',
+		body: JSON.stringify({})
+	});
+
+	return response.game;
+}
+
