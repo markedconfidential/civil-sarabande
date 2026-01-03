@@ -17,12 +17,12 @@
 	});
 
 	// Check user status when authenticated, reset when not
-	$: if (!$isLoading) {
-		if ($isAuthenticated) {
+	$: if ($isAuthenticated) {
+		if (!$isLoading) {
 			checkUserStatus();
-		} else {
-			checkingUser = false;
 		}
+	} else {
+		checkingUser = false;
 	}
 
 	async function checkUserStatus() {
