@@ -10,15 +10,19 @@
 	let waitingGames: WaitingGamesResponse['games'] = [];
 	let loading = false;
 	let error: string | null = null;
-	let checkingUser = true;
+	let checkingUser = false;
 
 	onMount(async () => {
 		await refreshWaitingGames();
 	});
 
-	// Check user status when authenticated
-	$: if ($isAuthenticated && !$isLoading) {
-		checkUserStatus();
+	// Check user status when authenticated, reset when not
+	$: if (!$isLoading) {
+		if ($isAuthenticated) {
+			checkUserStatus();
+		} else {
+			checkingUser = false;
+		}
 	}
 
 	async function checkUserStatus() {
@@ -145,48 +149,14 @@
 			<div class="loading-spinner"></div>
 			<p>Loading...</p>
 		</div>
-	{/if}
-
-	{#if !$isAuthenticated}
+	{:else if !$isAuthenticated}
 		<div class="auth-section card">
 			<h2>Welcome</h2>
 			<p>Sign in only to create or join a game. Browsing open games is always available.</p>
 			<button type="button" on:click={login} class="btn-gold btn-lg">Sign In</button>
 		</div>
-	{:else}
-		<div class="user-bar">
-			<div class="user-info">
-				Signed in as <strong>{$onboardingStatus.username || 'Loading...'}</strong>
-			</div>
-			<button type="button" on:click={handleLogout} class="btn-secondary btn-sm">Sign Out</button>
-		</div>
-	{/if}
 
-	<div class="grid grid--2col">
-		{#if $isAuthenticated}
-			<!-- Create Game Panel -->
-			<div class="card">
-				<h2>Create Game</h2>
-				<form on:submit|preventDefault={handleCreateGame}>
-					<div class="form-group">
-						<label for="stake">Stake (USDC)</label>
-						<input
-							type="number"
-							id="stake"
-							bind:value={stake}
-							min="1"
-							required
-							disabled={loading}
-						/>
-					</div>
-					<button type="submit" class="btn-primary btn-lg" disabled={loading}>
-						{loading ? 'Creating...' : 'Create Game'}
-					</button>
-				</form>
-			</div>
-		{/if}
-
-		<!-- Waiting Games Panel -->
+		<!-- Waiting Games Panel (unauthenticated) -->
 		<div class="card">
 			<div class="card-header">
 				<h2>Open Games</h2>
@@ -229,42 +199,151 @@
 				</div>
 			{/if}
 		</div>
-	</div>
 
-	<!-- How to Play -->
-	<div class="card how-to-play">
-		<h2>How to Play</h2>
-		<div class="rules-grid">
-			<div class="rule">
-				<span class="rule-num">1</span>
-				<div>
-					<strong>Choose Columns</strong>
-					<p>Pick columns for yourself to determine which cells score for you.</p>
+		<!-- How to Play -->
+		<div class="card how-to-play">
+			<h2>How to Play</h2>
+			<div class="rules-grid">
+				<div class="rule">
+					<span class="rule-num">1</span>
+					<div>
+						<strong>Choose Columns</strong>
+						<p>Pick columns for yourself to determine which cells score for you.</p>
+					</div>
 				</div>
-			</div>
-			<div class="rule">
-				<span class="rule-num">2</span>
-				<div>
-					<strong>Assign Rows</strong>
-					<p>Assign rows to your opponent, determining which cells score for them.</p>
+				<div class="rule">
+					<span class="rule-num">2</span>
+					<div>
+						<strong>Assign Rows</strong>
+						<p>Assign rows to your opponent, determining which cells score for them.</p>
+					</div>
 				</div>
-			</div>
-			<div class="rule">
-				<span class="rule-num">3</span>
-				<div>
-					<strong>Place Bets</strong>
-					<p>Between each move, bet on your hand. Call, raise, or fold.</p>
+				<div class="rule">
+					<span class="rule-num">3</span>
+					<div>
+						<strong>Place Bets</strong>
+						<p>Between each move, bet on your hand. Call, raise, or fold.</p>
+					</div>
 				</div>
-			</div>
-			<div class="rule">
-				<span class="rule-num">4</span>
-				<div>
-					<strong>Reveal & Score</strong>
-					<p>Reveal one column to score. Highest total wins the pot.</p>
+				<div class="rule">
+					<span class="rule-num">4</span>
+					<div>
+						<strong>Reveal & Score</strong>
+						<p>Reveal one column to score. Highest total wins the pot.</p>
+					</div>
 				</div>
 			</div>
 		</div>
-	</div>
+	{:else}
+		<div class="user-bar">
+			<div class="user-info">
+				Signed in as <strong>{$onboardingStatus.username || 'Loading...'}</strong>
+			</div>
+			<button type="button" on:click={handleLogout} class="btn-secondary btn-sm">Sign Out</button>
+		</div>
+
+		<div class="grid grid--2col">
+			<!-- Create Game Panel -->
+			<div class="card">
+				<h2>Create Game</h2>
+				<form on:submit|preventDefault={handleCreateGame}>
+					<div class="form-group">
+						<label for="stake">Stake (USDC)</label>
+						<input
+							type="number"
+							id="stake"
+							bind:value={stake}
+							min="1"
+							required
+							disabled={loading}
+						/>
+					</div>
+					<button type="submit" class="btn-primary btn-lg" disabled={loading}>
+						{loading ? 'Creating...' : 'Create Game'}
+					</button>
+				</form>
+			</div>
+
+			<!-- Waiting Games Panel (authenticated) -->
+			<div class="card">
+				<div class="card-header">
+					<h2>Open Games</h2>
+					<button
+						type="button"
+						class="btn-secondary btn-sm"
+						on:click={refreshWaitingGames}
+						disabled={loading}
+					>
+						Refresh
+					</button>
+				</div>
+
+				{#if waitingGames.length === 0}
+					<div class="empty-state">
+						<p>No games waiting for players</p>
+						<p class="text-muted">Create a game or check back later</p>
+					</div>
+				{:else}
+					<div class="game-list">
+						{#each waitingGames as game}
+							<div class="game-item">
+								<div class="game-item-info">
+									<span class="game-item-id">{game.gameId.slice(0, 20)}...</span>
+									<span class="game-item-player">
+										Hosted by <strong>{game.player1.name || 'Unknown'}</strong>
+									</span>
+									<span class="game-item-stake">Stake: {game.stake} USDC</span>
+								</div>
+								<button
+									type="button"
+									class="btn-gold"
+									on:click={() => handleJoinGame(game.gameId)}
+									disabled={loading}
+								>
+									Join
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</div>
+
+		<!-- How to Play -->
+		<div class="card how-to-play">
+			<h2>How to Play</h2>
+			<div class="rules-grid">
+				<div class="rule">
+					<span class="rule-num">1</span>
+					<div>
+						<strong>Choose Columns</strong>
+						<p>Pick columns for yourself to determine which cells score for you.</p>
+					</div>
+				</div>
+				<div class="rule">
+					<span class="rule-num">2</span>
+					<div>
+						<strong>Assign Rows</strong>
+						<p>Assign rows to your opponent, determining which cells score for them.</p>
+					</div>
+				</div>
+				<div class="rule">
+					<span class="rule-num">3</span>
+					<div>
+						<strong>Place Bets</strong>
+						<p>Between each move, bet on your hand. Call, raise, or fold.</p>
+					</div>
+				</div>
+				<div class="rule">
+					<span class="rule-num">4</span>
+					<div>
+						<strong>Reveal & Score</strong>
+						<p>Reveal one column to score. Highest total wins the pot.</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
