@@ -4,10 +4,10 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [
-		sveltekit(),
 		react({
 			include: '**/*.{tsx,jsx}'
-		})
+		}),
+		sveltekit()
 	],
 	optimizeDeps: {
 		include: ['react', 'react-dom', '@privy-io/react-auth']
