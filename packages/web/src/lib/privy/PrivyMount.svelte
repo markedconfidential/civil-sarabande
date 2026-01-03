@@ -7,40 +7,42 @@
 
 	onMount(async () => {
 		// Dynamically import React and the Privy provider
-		const [React, ReactDOM, { PrivyProviderWrapper }] = await Promise.all([
-			import('react'),
-			import('react-dom/client'),
-			import('./PrivyProvider')
-		]);
+		Promise.all([import('react'), import('react-dom/client'), import('./PrivyProvider')])
+			.then(([React, ReactDOM, { PrivyProviderWrapper }]) => {
+				// Create root and render
+				root = ReactDOM.createRoot(container);
 
-		// Create root and render
-		root = ReactDOM.createRoot(container);
+				const handleEvent = (event: any) => {
+					switch (event.type) {
+						case 'ready':
+							authStore.setLoading(false);
+							break;
+						case 'authenticated':
+							authStore.setAuthenticated(event.user, event.accessToken);
+							break;
+						case 'logout':
+							authStore.logout();
+							break;
+						case 'wallet':
+							authStore.setWalletAddress(event.address);
+							break;
+						case 'error':
+							console.error('Privy error:', event.message);
+							authStore.setError(event.message ?? 'Auth unavailable; browsing in guest mode');
+							break;
+					}
+				};
 
-		const handleEvent = (event: any) => {
-			switch (event.type) {
-				case 'ready':
-					authStore.setLoading(false);
-					break;
-				case 'authenticated':
-					authStore.setAuthenticated(event.user, event.accessToken);
-					break;
-				case 'logout':
-					authStore.logout();
-					break;
-				case 'wallet':
-					authStore.setWalletAddress(event.address);
-					break;
-				case 'error':
-					console.error('Privy error:', event.message);
-					break;
-			}
-		};
-
-		root.render(
-			React.createElement(PrivyProviderWrapper, {
-				onEvent: handleEvent
+				root.render(
+					React.createElement(PrivyProviderWrapper, {
+						onEvent: handleEvent
+					})
+				);
 			})
-		);
+			.catch((error) => {
+				console.error('Failed to load Privy auth:', error);
+				authStore.setError('Auth unavailable; browsing in guest mode');
+			});
 	});
 
 	onDestroy(() => {
@@ -52,4 +54,3 @@
 
 <!-- Hidden container for React Privy provider -->
 <div bind:this={container} style="display: none;" />
-

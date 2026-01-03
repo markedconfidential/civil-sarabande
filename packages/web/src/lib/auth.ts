@@ -15,6 +15,7 @@ export interface AuthState {
 	user: User | null;
 	walletAddress: string | null;
 	accessToken: string | null;
+	error: string | null;
 }
 
 // Initial state
@@ -23,7 +24,8 @@ const initialState: AuthState = {
 	isAuthenticated: false,
 	user: null,
 	walletAddress: null,
-	accessToken: null
+	accessToken: null,
+	error: null
 };
 
 // Create the auth store
@@ -39,10 +41,17 @@ function createAuthStore() {
 				isLoading: false,
 				isAuthenticated: !!user,
 				user,
-				accessToken
+				accessToken,
+				error: null
 			})),
 		setWalletAddress: (walletAddress: string | null) =>
 			update((state) => ({ ...state, walletAddress })),
+		setError: (error: string) =>
+			update((state) => ({
+				...state,
+				isLoading: false,
+				error
+			})),
 		logout: () => set({ ...initialState, isLoading: false }),
 		reset: () => set(initialState)
 	};
@@ -56,6 +65,7 @@ export const isLoading = derived(authStore, ($auth) => $auth.isLoading);
 export const user = derived(authStore, ($auth) => $auth.user);
 export const walletAddress = derived(authStore, ($auth) => $auth.walletAddress);
 export const accessToken = derived(authStore, ($auth) => $auth.accessToken);
+export const authError = derived(authStore, ($auth) => $auth.error);
 
 /**
  * Get the Privy user ID from the current user.
@@ -93,4 +103,3 @@ export const onboardingStatus = writable<{
 	username: null,
 	isLoading: true
 });
-
