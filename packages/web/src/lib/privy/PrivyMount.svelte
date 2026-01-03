@@ -28,6 +28,7 @@
 							break;
 						case 'error':
 							console.error('Privy error:', event.message);
+							authStore.setLoading(false);
 							authStore.setError(event.message ?? 'Auth unavailable; browsing in guest mode');
 							break;
 					}
@@ -41,6 +42,7 @@
 			})
 			.catch((error) => {
 				console.error('Failed to load Privy auth:', error);
+				authStore.setLoading(false);
 				authStore.setError('Auth unavailable; browsing in guest mode');
 			});
 	});

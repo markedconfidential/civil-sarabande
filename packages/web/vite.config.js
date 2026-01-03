@@ -4,11 +4,11 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [
-		sveltekit(),
 		react({
 			// Only apply React plugin to .tsx files in the privy directory
-			include: '**/*.tsx'
-		})
+			include: /\/privy\/.*\.(tsx|jsx)$/
+		}),
+		sveltekit()
 	],
 	optimizeDeps: {
 		include: ['react', 'react-dom', '@privy-io/react-auth']
