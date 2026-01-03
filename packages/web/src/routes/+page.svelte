@@ -145,10 +145,12 @@
 			<div class="loading-spinner"></div>
 			<p>Loading...</p>
 		</div>
-	{:else if !$isAuthenticated}
+	{/if}
+
+	{#if !$isAuthenticated}
 		<div class="auth-section card">
 			<h2>Welcome</h2>
-			<p>Sign in to create or join games.</p>
+			<p>Sign in only to create or join a game. Browsing open games is always available.</p>
 			<button type="button" on:click={login} class="btn-gold btn-lg">Sign In</button>
 		</div>
 	{:else}
@@ -158,8 +160,10 @@
 			</div>
 			<button type="button" on:click={handleLogout} class="btn-secondary btn-sm">Sign Out</button>
 		</div>
+	{/if}
 
-		<div class="grid grid--2col">
+	<div class="grid grid--2col">
+		{#if $isAuthenticated}
 			<!-- Create Game Panel -->
 			<div class="card">
 				<h2>Create Game</h2>
@@ -180,52 +184,52 @@
 					</button>
 				</form>
 			</div>
+		{/if}
 
-			<!-- Waiting Games Panel -->
-			<div class="card">
-				<div class="card-header">
-					<h2>Open Games</h2>
-					<button 
-						type="button" 
-						class="btn-secondary btn-sm" 
-						on:click={refreshWaitingGames} 
-						disabled={loading}
-					>
-						Refresh
-					</button>
-				</div>
-
-				{#if waitingGames.length === 0}
-					<div class="empty-state">
-						<p>No games waiting for players</p>
-						<p class="text-muted">Create a game or check back later</p>
-					</div>
-				{:else}
-					<div class="game-list">
-						{#each waitingGames as game}
-							<div class="game-item">
-								<div class="game-item-info">
-									<span class="game-item-id">{game.gameId.slice(0, 20)}...</span>
-									<span class="game-item-player">
-										Hosted by <strong>{game.player1.name || 'Unknown'}</strong>
-									</span>
-									<span class="game-item-stake">Stake: {game.stake} USDC</span>
-								</div>
-								<button
-									type="button"
-									class="btn-gold"
-									on:click={() => handleJoinGame(game.gameId)}
-									disabled={loading}
-								>
-									Join
-								</button>
-							</div>
-						{/each}
-					</div>
-				{/if}
+		<!-- Waiting Games Panel -->
+		<div class="card">
+			<div class="card-header">
+				<h2>Open Games</h2>
+				<button
+					type="button"
+					class="btn-secondary btn-sm"
+					on:click={refreshWaitingGames}
+					disabled={loading}
+				>
+					Refresh
+				</button>
 			</div>
+
+			{#if waitingGames.length === 0}
+				<div class="empty-state">
+					<p>No games waiting for players</p>
+					<p class="text-muted">Create a game or check back later</p>
+				</div>
+			{:else}
+				<div class="game-list">
+					{#each waitingGames as game}
+						<div class="game-item">
+							<div class="game-item-info">
+								<span class="game-item-id">{game.gameId.slice(0, 20)}...</span>
+								<span class="game-item-player">
+									Hosted by <strong>{game.player1.name || 'Unknown'}</strong>
+								</span>
+								<span class="game-item-stake">Stake: {game.stake} USDC</span>
+							</div>
+							<button
+								type="button"
+								class="btn-gold"
+								on:click={() => handleJoinGame(game.gameId)}
+								disabled={loading}
+							>
+								Join
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
-	{/if}
+	</div>
 
 	<!-- How to Play -->
 	<div class="card how-to-play">
