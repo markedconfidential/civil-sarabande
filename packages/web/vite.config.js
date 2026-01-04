@@ -1,14 +1,18 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import react from '@vitejs/plugin-react';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [
-		react({
-			include: '**/*.{tsx,jsx}'
+		nodePolyfills({
+			include: ['buffer', 'util']
 		}),
 		sveltekit()
 	],
+	esbuild: {
+		jsx: 'automatic',
+		jsxImportSource: 'react'
+	},
 	optimizeDeps: {
 		include: ['react', 'react-dom', '@privy-io/react-auth']
 	}

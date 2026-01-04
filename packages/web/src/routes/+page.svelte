@@ -6,6 +6,9 @@
 	import { login, logout } from '$lib/privy';
 	import type { WaitingGamesResponse } from '@civil-sarabande/shared';
 
+	// SvelteKit passes params to all pages
+	export let params: Record<string, string> = {};
+
 	let stake = 1;
 	let waitingGames: WaitingGamesResponse['games'] = [];
 	let loading = false;

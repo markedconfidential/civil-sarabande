@@ -31,15 +31,14 @@ export function logout(): Promise<void> {
 
 /**
  * Get a fresh access token for API calls.
+ * Returns null silently if Privy isn't ready yet (e.g., during initial page load).
  */
 export async function getAccessToken(): Promise<string | null> {
 	const privyGetAccessToken = (window as any).__privyGetAccessToken;
 	if (privyGetAccessToken) {
 		return privyGetAccessToken();
-	} else {
-		console.error('Privy not initialized');
-		return null;
 	}
+	return null;
 }
 
 // Re-export the mount component
