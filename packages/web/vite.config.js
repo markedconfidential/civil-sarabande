@@ -1,17 +1,16 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [
-		sveltekit(),
-		react({
-			// Only apply React plugin to .tsx files in the privy directory
-			include: '**/*.tsx'
-		})
-	],
+	plugins: [sveltekit()],
+	esbuild: {
+		jsx: 'automatic',
+		jsxImportSource: 'react'
+	},
 	optimizeDeps: {
 		include: ['react', 'react-dom', '@privy-io/react-auth']
+	},
+	resolve: {
+		dedupe: ['react', 'react-dom']
 	}
 });
-
