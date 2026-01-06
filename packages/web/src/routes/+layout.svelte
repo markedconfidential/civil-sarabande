@@ -6,6 +6,9 @@
 	import { isAuthenticated, isLoading } from '$lib/auth';
 	import '../app.css';
 
+	// SvelteKit passes params to all layouts
+	export let params: Record<string, string> = {};
+
 	onMount(() => {
 		init();
 	});
