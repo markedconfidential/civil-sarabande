@@ -17,6 +17,32 @@ import { getAccessToken } from './privy';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 /**
+ * Make a public fetch request (no authentication required).
+ * Used for endpoints that don't need user authentication.
+ */
+async function publicRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+	const url = `${API_BASE_URL}${endpoint}`;
+	const headers: HeadersInit = {
+		'Content-Type': 'application/json',
+		...options.headers
+	};
+
+	const response = await fetch(url, {
+		...options,
+		headers
+	});
+
+	if (!response.ok) {
+		const error: ErrorResponse = await response.json().catch(() => ({
+			error: `HTTP ${response.status}: ${response.statusText}`
+		}));
+		throw new Error(error.error || `HTTP ${response.status}`);
+	}
+
+	return response.json();
+}
+
+/**
  * Make a fetch request and handle errors.
  * Automatically includes Privy access token for authentication.
  */
@@ -67,14 +93,15 @@ export async function createGame(stake: number): Promise<GameStateView> {
 
 /**
  * List all games waiting for a second player.
+ * This is a public endpoint that doesn't require authentication.
  * 
  * @returns List of waiting games
  */
 export async function listWaitingGames(): Promise<WaitingGamesResponse['games']> {
-	const response: WaitingGamesResponse = await request<WaitingGamesResponse>(
+	const response: WaitingGamesResponse = await publicRequest<WaitingGamesResponse>(
 		'/games/waiting',
 		{
-			method: 'GET',
+			method: 'GET'
 		}
 	);
 

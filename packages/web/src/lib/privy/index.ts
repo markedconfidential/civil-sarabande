@@ -6,38 +6,39 @@
 
 /**
  * Open the Privy login modal.
+ * No-op if Privy is not yet initialized.
  */
 export function login(): void {
 	const privyLogin = (window as any).__privyLogin;
 	if (privyLogin) {
 		privyLogin();
-	} else {
-		console.error('Privy not initialized');
 	}
+	// Silently ignore if Privy isn't ready yet
 }
 
 /**
  * Log out the current user.
+ * Resolves immediately if Privy is not yet initialized.
  */
 export function logout(): Promise<void> {
 	const privyLogout = (window as any).__privyLogout;
 	if (privyLogout) {
 		return privyLogout();
-	} else {
-		console.error('Privy not initialized');
-		return Promise.resolve();
 	}
+	// Silently resolve if Privy isn't ready yet
+	return Promise.resolve();
 }
 
 /**
  * Get a fresh access token for API calls.
- * Returns null silently if Privy isn't ready yet (e.g., during initial page load).
+ * Returns null if Privy is not yet initialized (this is expected during startup).
  */
 export async function getAccessToken(): Promise<string | null> {
 	const privyGetAccessToken = (window as any).__privyGetAccessToken;
 	if (privyGetAccessToken) {
 		return privyGetAccessToken();
 	}
+	// Not an error - Privy just isn't ready yet
 	return null;
 }
 
