@@ -220,34 +220,52 @@
 	}
 
 	// Calculate current scores based on committed moves
+	// Must account for perspective mirroring: Player 2's moves are stored from their flipped perspective
 	function calculateScores(): { yourScore: number; theirScore: number } {
 		if (!game) return { yourScore: 0, theirScore: 0 };
-		
-		const chosenCols = getChosenColumns();
-		const assignedRows = getAssignedRows();
-		
+
+		const isPlayer1 = game.yourRole === 'player1';
+
+		// Your score: your columns + rows opponent assigned to you
 		let yourScore = 0;
-		const numScored = Math.min(chosenCols.length, assignedRows.length);
-		
+		const yourCols = [game.yourMoves[0], game.yourMoves[2], game.yourMoves[4]].filter(v => v !== undefined);
+		const theirAssignedRows = [game.theirMoves[1], game.theirMoves[3], game.theirMoves[5]].filter(v => v !== undefined);
+
+		const numScored = Math.min(yourCols.length, theirAssignedRows.length);
 		for (let i = 0; i < numScored; i++) {
-			const col = chosenCols[i];
-			const row = assignedRows[i];
+			let col = yourCols[i];
+			let row = theirAssignedRows[i];
+
+			if (isPlayer1) {
+				// P1: your columns are direct, opponent's (P2) rows need mirroring
+				row = BOARD_SIZE - 1 - row;
+			} else {
+				// P2: your columns need mirroring (from your flipped perspective), opponent's (P1) rows are direct
+				col = BOARD_SIZE - 1 - col;
+			}
+
 			yourScore += game.board[row * BOARD_SIZE + col];
 		}
 
-		// Opponent's score (simplified - they see mirrored board)
-		// For display purposes, we compute based on their revealed moves
+		// Their score: their columns + rows you assigned to them
 		let theirScore = 0;
 		const theirCols = [game.theirMoves[0], game.theirMoves[2], game.theirMoves[4]].filter(v => v !== undefined);
 		const yourAssignedRows = [game.yourMoves[1], game.yourMoves[3], game.yourMoves[5]].filter(v => v !== undefined);
-		
+
 		const theirNumScored = Math.min(theirCols.length, yourAssignedRows.length);
 		for (let i = 0; i < theirNumScored; i++) {
-			// Their column (from their perspective, mirrored)
-			const theirCol = BOARD_SIZE - 1 - theirCols[i];
-			// Row we assigned them (mirrored)
-			const theirRow = BOARD_SIZE - 1 - yourAssignedRows[i];
-			theirScore += game.board[theirRow * BOARD_SIZE + theirCol];
+			let col = theirCols[i];
+			let row = yourAssignedRows[i];
+
+			if (isPlayer1) {
+				// P1: opponent's (P2) columns need mirroring, your row assignments are direct
+				col = BOARD_SIZE - 1 - col;
+			} else {
+				// P2: opponent's (P1) columns are direct, your row assignments need mirroring
+				row = BOARD_SIZE - 1 - row;
+			}
+
+			theirScore += game.board[row * BOARD_SIZE + col];
 		}
 
 		return { yourScore, theirScore };

@@ -607,9 +607,10 @@ export function startNextRound(state: GameState, seed?: number): GameState {
  * @returns Updated game state with game ended
  */
 export function leaveGame(state: GameState, playerId: string): GameState {
-  // Can't leave a game that's already ended or waiting
+  // If game is already ended (e.g., other player left first), just return current state
+  // This allows the remaining player to gracefully exit
   if (state.phase === "ended") {
-    throw new Error("Game already ended");
+    return state;
   }
 
   if (state.phase === "waiting") {
