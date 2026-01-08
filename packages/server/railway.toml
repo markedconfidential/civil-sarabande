@@ -3,7 +3,7 @@ builder = "nixpacks"
 nixpacksConfigPath = "packages/server/nixpacks.toml"
 
 [deploy]
-startCommand = "bun src/index.ts"
+startCommand = "bun packages/server/src/index.ts"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"

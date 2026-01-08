@@ -8,4 +8,4 @@ nixPkgs = ["bun"]
 cmds = ["bun install"]
 
 [start]
-cmd = "bun src/index.ts"
+cmd = "bun packages/server/src/index.ts"
