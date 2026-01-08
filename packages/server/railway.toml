@@ -1,5 +1,6 @@
 [build]
 builder = "nixpacks"
+nixpacksConfigPath = "packages/server/nixpacks.toml"
 
 [deploy]
 startCommand = "bun src/index.ts"

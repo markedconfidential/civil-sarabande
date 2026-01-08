@@ -1,3 +1,6 @@
+# Explicitly use only Bun, no Node.js
+providers = []
+
 [phases.setup]
 nixPkgs = ["bun"]
 
