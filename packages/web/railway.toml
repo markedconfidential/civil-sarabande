@@ -1,0 +1,6 @@
+# This package is deployed to Vercel, not Railway
+# This file prevents Railway from auto-detecting and deploying it
+
+[build]
+builder = "nixpacks"
+buildCommand = "echo 'This package should be deployed to Vercel, not Railway' && exit 1"
