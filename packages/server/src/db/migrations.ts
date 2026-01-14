@@ -58,9 +58,37 @@ export function runMigrations(db: Database): void {
       stake INTEGER NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
-      started_at INTEGER
+      started_at INTEGER,
+      contract_game_id TEXT,
+      escrow_address TEXT,
+      payout_tx_hash TEXT
     )
   `);
+  
+  // Add contract-related columns if they don't exist (for existing databases)
+  try {
+    db.exec(`
+      ALTER TABLE games ADD COLUMN contract_game_id TEXT
+    `);
+  } catch {
+    // Column already exists, ignore
+  }
+  
+  try {
+    db.exec(`
+      ALTER TABLE games ADD COLUMN escrow_address TEXT
+    `);
+  } catch {
+    // Column already exists, ignore
+  }
+  
+  try {
+    db.exec(`
+      ALTER TABLE games ADD COLUMN payout_tx_hash TEXT
+    `);
+  } catch {
+    // Column already exists, ignore
+  }
 
   // Create game_history table
   db.exec(`

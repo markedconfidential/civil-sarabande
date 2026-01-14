@@ -7,7 +7,7 @@
 
 import React, { useEffect, useCallback } from 'react';
 import { PrivyProvider as PrivyReactProvider, usePrivy, useWallets } from '@privy-io/react-auth';
-import { base } from 'viem/chains';
+import { base, baseSepolia } from 'viem/chains';
 
 // Privy app ID from environment
 const PRIVY_APP_ID = (import.meta as any).env?.VITE_PRIVY_APP_ID || '';
@@ -31,6 +31,24 @@ interface PrivyProviderProps {
 function PrivyAuthSync({ onEvent }: PrivyProviderProps) {
 	const { ready, authenticated, user, logout, login, getAccessToken } = usePrivy();
 	const { wallets } = useWallets();
+	
+	// Expose wallet provider for contract interactions
+	useEffect(() => {
+		if (!ready || !wallets.length) return;
+		
+		const embeddedWallet = wallets.find((w) => w.walletClientType === 'privy');
+		if (embeddedWallet) {
+			// Get the provider from the wallet
+			embeddedWallet.getEthereumProvider().then((provider: any) => {
+				if (provider) {
+					(window as any).ethereum = provider;
+					(window as any).privyProvider = provider;
+				}
+			}).catch(() => {
+				// Provider not available yet
+			});
+		}
+	}, [ready, wallets]);
 
 	// Sync auth state with Svelte
 	useEffect(() => {
@@ -108,8 +126,8 @@ export function PrivyProviderWrapper({ onEvent }: PrivyProviderProps) {
 					createOnLogin: 'users-without-wallets',
 					showWalletUIs: true
 				},
-				defaultChain: base,
-				supportedChains: [base]
+				defaultChain: baseSepolia, // Use Base Sepolia for testnet
+				supportedChains: [baseSepolia, base] // Support both testnet and mainnet
 			}}
 		>
 			<PrivyAuthSync onEvent={handleEvent} />

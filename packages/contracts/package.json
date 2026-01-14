@@ -1,0 +1,12 @@
+{
+  "name": "@civil-sarabande/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "test:verbose": "forge test -vvv",
+    "deploy:sepolia": "forge script script/Deploy.s.sol:DeployScript --rpc-url base_sepolia --broadcast --verify",
+    "verify": "forge verify-contract --chain-id 84532"
+  }
+}

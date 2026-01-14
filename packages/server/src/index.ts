@@ -24,6 +24,14 @@ import {
 } from "./api/userRoutes";
 import { handleGetBalance } from "./api/wallet";
 import {
+  handlePrepareCreateGame,
+  handlePrepareJoinGame,
+  handlePrepareBet,
+  handlePayoutWinner,
+  handleCancelGame,
+  handleGetServerAddress,
+} from "./api/contractRoutes";
+import {
   onOpen,
   onMessage,
   onClose,
@@ -133,6 +141,27 @@ const server = Bun.serve<ConnectionData>({
       // Wallet balance
       else if (pathname === "/wallet/balance" && method === "GET") {
         response = await handleGetBalance(req);
+      }
+      // Contract routes
+      else if (pathname.startsWith("/contracts/")) {
+        if (pathname === "/contracts/server-address" && method === "GET") {
+          response = handleGetServerAddress();
+        } else if (pathname.endsWith("/prepare-create") && method === "POST") {
+          response = await handlePrepareCreateGame(req, pathname);
+        } else if (pathname.endsWith("/prepare-join") && method === "POST") {
+          response = await handlePrepareJoinGame(req, pathname);
+        } else if (pathname.endsWith("/prepare-bet") && method === "POST") {
+          response = await handlePrepareBet(req, pathname);
+        } else if (pathname.endsWith("/payout") && method === "POST") {
+          response = await handlePayoutWinner(req, pathname);
+        } else if (pathname.endsWith("/cancel") && method === "POST") {
+          response = await handleCancelGame(req, pathname);
+        } else {
+          response = Response.json(
+            { error: "Not found" },
+            { status: 404 }
+          );
+        }
       }
       // List waiting games
       else if (pathname === "/games/waiting" && method === "GET") {
