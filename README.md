@@ -92,6 +92,8 @@ The project uses smart contracts on Base Sepolia testnet for USDC escrow:
 - `GAME_ESCROW_CONTRACT_ADDRESS` - Deployed escrow contract address
 - `USDC_CONTRACT_ADDRESS` - USDC token address (testnet: `0x036CbD53842c5426634e7929C8C4E5b8c0C5b6E8`)
 - `SERVER_WALLET_PRIVATE_KEY` - Server wallet private key (for payouts)
+- `CORS_ALLOWED_ORIGINS` - Comma-separated allowlist of origins (required in production)
+- `LOG_LEVEL` - Structured log level (`debug`, `info`, `warn`, `error`)
 
 **Frontend** (`packages/web/.env`):
 - `VITE_API_URL` - Backend API URL
@@ -103,4 +105,3 @@ The project uses smart contracts on Base Sepolia testnet for USDC escrow:
 ## License
 
 See `no_copyright.txt`
-

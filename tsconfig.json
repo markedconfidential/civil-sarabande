@@ -1,5 +1,9 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@civil-sarabande/shared": ["packages/shared/src/index.ts"]
+    },
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -13,4 +17,3 @@
     "composite": true
   }
 }
-

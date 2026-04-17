@@ -95,5 +95,17 @@ describe("Database Integration", () => {
     const retrieved = gameRepo.getGameStartedAt(db, game.gameId);
     expect(retrieved).toBe(startedAt);
   });
-});
 
+  test("can store payout transaction hash", () => {
+    const player1 = { id: "p1", name: "Player 1" };
+    const game = createGame(player1, 100);
+
+    gameRepo.createGame(db, game);
+
+    const txHash = "0xabc123";
+    gameRepo.setPayoutTxHash(db, game.gameId, txHash);
+
+    const retrieved = gameRepo.getPayoutTxHash(db, game.gameId);
+    expect(retrieved).toBe(txHash);
+  });
+});

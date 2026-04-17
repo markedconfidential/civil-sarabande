@@ -38,10 +38,27 @@ import {
   type ConnectionData,
 } from "./websocket";
 import { getDatabase, closeDatabase } from "./db/database";
+import { validateServerEnv, isProductionEnv, getAllowedCorsOrigins } from "./config/env";
+import { createLogger } from "./utils/logger";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
+const logger = createLogger("server/index");
+const allowedCorsOrigins = new Set(getAllowedCorsOrigins());
 
-console.log("Civil Sarabande server starting...");
+function resolveAllowedOrigin(requestOrigin: string | null): string | null {
+  if (!isProductionEnv()) {
+    return "*";
+  }
+
+  if (!requestOrigin) {
+    return null;
+  }
+
+  return allowedCorsOrigins.has(requestOrigin) ? requestOrigin : null;
+}
+
+logger.info("Civil Sarabande server starting", { port: PORT });
+validateServerEnv();
 
 // Initialize database
 getDatabase();
@@ -53,12 +70,24 @@ const server = Bun.serve<ConnectionData>({
     const url = new URL(req.url);
     const { pathname } = url;
     const method = req.method;
+    const requestOrigin = req.headers.get("Origin");
+    const allowedOrigin = resolveAllowedOrigin(requestOrigin);
 
-    // CORS headers for development
+    if (isProductionEnv() && requestOrigin && !allowedOrigin) {
+      logger.warn("Blocked request from disallowed origin", {
+        origin: requestOrigin,
+        pathname,
+        method,
+      });
+      return Response.json({ error: "Origin not allowed" }, { status: 403 });
+    }
+
+    // CORS headers
     const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": allowedOrigin ?? "null",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      Vary: "Origin",
     };
 
     // Handle preflight requests
@@ -237,7 +266,7 @@ const server = Bun.serve<ConnectionData>({
         headers: newHeaders,
       });
     } catch (err) {
-      console.error("Unhandled error:", err);
+      logger.error("Unhandled server error", { error: err, pathname, method });
       return Response.json(
         { error: "Internal server error" },
         { status: 500, headers: corsHeaders }
@@ -253,38 +282,41 @@ const server = Bun.serve<ConnectionData>({
   },
 });
 
-console.log(`Server running at http://localhost:${server.port}`);
-console.log("Available endpoints:");
-console.log("  GET  /health");
-console.log("  GET  /");
-console.log("  WS   /ws");
-console.log("User Management:");
-console.log("  GET  /users/me");
-console.log("  POST /users/username");
-console.log("  GET  /users/username/:username");
-console.log("  POST /users/wallet");
-console.log("Game Management:");
-console.log("  POST /games");
-console.log("  GET  /games/waiting");
-console.log("  GET  /games/:id");
-console.log("  POST /games/:id/join");
-console.log("  POST /games/:id/move");
-console.log("  POST /games/:id/bet");
-console.log("  POST /games/:id/fold");
-console.log("  POST /games/:id/reveal");
-console.log("  POST /games/:id/end-round");
-console.log("  POST /games/:id/next-round");
-console.log("  POST /games/:id/leave");
+logger.info("Server running", { url: `http://localhost:${server.port}` });
+logger.info("Available endpoints", {
+  health: "GET /health",
+  info: "GET /",
+  websocket: "WS /ws",
+  userRoutes: [
+    "GET /users/me",
+    "POST /users/username",
+    "GET /users/username/:username",
+    "POST /users/wallet",
+  ],
+  gameRoutes: [
+    "POST /games",
+    "GET /games/waiting",
+    "GET /games/:id",
+    "POST /games/:id/join",
+    "POST /games/:id/move",
+    "POST /games/:id/bet",
+    "POST /games/:id/fold",
+    "POST /games/:id/reveal",
+    "POST /games/:id/end-round",
+    "POST /games/:id/next-round",
+    "POST /games/:id/leave",
+  ],
+});
 
 // Graceful shutdown
 process.on("SIGINT", () => {
-  console.log("\nShutting down gracefully...");
+  logger.info("Received SIGINT, shutting down gracefully");
   closeDatabase();
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  console.log("\nShutting down gracefully...");
+  logger.info("Received SIGTERM, shutting down gracefully");
   closeDatabase();
   process.exit(0);
 });

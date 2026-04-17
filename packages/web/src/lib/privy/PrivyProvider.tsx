@@ -6,23 +6,30 @@
  */
 
 import React, { useEffect, useCallback } from 'react';
-import { PrivyProvider as PrivyReactProvider, usePrivy, useWallets } from '@privy-io/react-auth';
+import {
+	PrivyProvider as PrivyReactProvider,
+	usePrivy,
+	useWallets,
+	type User
+} from '@privy-io/react-auth';
 import { base, baseSepolia } from 'viem/chains';
+import type { EthereumProviderLike, PrivyEvent } from './types';
 
 // Privy app ID from environment
-const PRIVY_APP_ID = (import.meta as any).env?.VITE_PRIVY_APP_ID || '';
-
-// Event types for communicating with Svelte
-export type PrivyEvent =
-	| { type: 'ready' }
-	| { type: 'authenticated'; user: any; accessToken: string | null }
-	| { type: 'logout' }
-	| { type: 'wallet'; address: string | null }
-	| { type: 'error'; message: string };
+const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || '';
 
 // Props for the provider
 interface PrivyProviderProps {
 	onEvent: (event: PrivyEvent) => void;
+}
+
+function isEthereumProviderLike(provider: unknown): provider is EthereumProviderLike {
+	return (
+		typeof provider === 'object' &&
+		provider !== null &&
+		'request' in provider &&
+		typeof (provider as { request: unknown }).request === 'function'
+	);
 }
 
 /**
@@ -39,14 +46,18 @@ function PrivyAuthSync({ onEvent }: PrivyProviderProps) {
 		const embeddedWallet = wallets.find((w) => w.walletClientType === 'privy');
 		if (embeddedWallet) {
 			// Get the provider from the wallet
-			embeddedWallet.getEthereumProvider().then((provider: any) => {
-				if (provider) {
-					(window as any).ethereum = provider;
-					(window as any).privyProvider = provider;
+			embeddedWallet
+				.getEthereumProvider()
+				.then((provider: unknown) => {
+					if (isEthereumProviderLike(provider)) {
+						window.ethereum = provider;
+						window.privyProvider = provider;
+					}
+				})
+				.catch(() => {
+					// Provider not available yet
 				}
-			}).catch(() => {
-				// Provider not available yet
-			});
+			);
 		}
 	}, [ready, wallets]);
 
@@ -57,7 +68,7 @@ function PrivyAuthSync({ onEvent }: PrivyProviderProps) {
 		if (authenticated && user) {
 			// Get access token and send to Svelte
 			getAccessToken().then((token) => {
-				onEvent({ type: 'authenticated', user, accessToken: token });
+				onEvent({ type: 'authenticated', user: user as User, accessToken: token });
 			});
 		} else {
 			onEvent({ type: 'logout' });
@@ -81,14 +92,14 @@ function PrivyAuthSync({ onEvent }: PrivyProviderProps) {
 
 	// Expose login/logout functions globally for Svelte to call
 	useEffect(() => {
-		(window as any).__privyLogin = login;
-		(window as any).__privyLogout = logout;
-		(window as any).__privyGetAccessToken = getAccessToken;
+		window.__privyLogin = login;
+		window.__privyLogout = logout;
+		window.__privyGetAccessToken = getAccessToken;
 
 		return () => {
-			delete (window as any).__privyLogin;
-			delete (window as any).__privyLogout;
-			delete (window as any).__privyGetAccessToken;
+			delete window.__privyLogin;
+			delete window.__privyLogout;
+			delete window.__privyGetAccessToken;
 		};
 	}, [login, logout, getAccessToken]);
 
@@ -136,4 +147,3 @@ export function PrivyProviderWrapper({ onEvent }: PrivyProviderProps) {
 }
 
 export default PrivyProviderWrapper;
-
