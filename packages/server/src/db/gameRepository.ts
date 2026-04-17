@@ -262,3 +262,23 @@ export function setGameStartedAt(db: Database, gameId: string, startedAt: number
   stmt.run(startedAt, gameId);
 }
 
+/**
+ * Get the payout transaction hash for a game.
+ */
+export function getPayoutTxHash(db: Database, gameId: string): string | null {
+  const stmt = db.prepare("SELECT payout_tx_hash FROM games WHERE game_id = ?");
+  const row = stmt.get(gameId) as { payout_tx_hash: string | null } | undefined;
+  return row?.payout_tx_hash ?? null;
+}
+
+/**
+ * Set the payout transaction hash for a game.
+ */
+export function setPayoutTxHash(db: Database, gameId: string, txHash: string): void {
+  const stmt = db.prepare(`
+    UPDATE games
+    SET payout_tx_hash = ?, updated_at = ?
+    WHERE game_id = ?
+  `);
+  stmt.run(txHash, Date.now(), gameId);
+}

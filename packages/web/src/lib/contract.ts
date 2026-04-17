@@ -7,6 +7,7 @@
 import { createWalletClient, custom, type Address, type Hash } from "viem";
 import { baseSepolia } from "viem/chains";
 import { getAccessToken } from "./privy";
+import type { EthereumProviderLike } from "./privy/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
@@ -78,11 +79,12 @@ async function getWalletClient() {
   // Try to get provider from Privy
   // Privy exposes the provider through the useWallets hook
   // For contract interactions, we need to use Privy's wallet connection
-  const privyProvider = (window as any).ethereum || (window as any).privyProvider;
+  const privyProvider: EthereumProviderLike | undefined =
+    window.ethereum || window.privyProvider;
   
   if (!privyProvider) {
     // Fallback: try to get from Privy's embedded wallet
-    const privy = (window as any).privy;
+    const privy = window.privy;
     if (privy && privy.getEthereumProvider) {
       const provider = await privy.getEthereumProvider();
       if (provider) {
@@ -123,9 +125,10 @@ export async function approveUSDC(amount: number): Promise<Hash> {
  */
 export async function checkUSDCAllowance(owner: Address): Promise<bigint> {
   // Get provider similar to getWalletClient
-  const privyProvider = (window as any).ethereum || (window as any).privyProvider;
+  const privyProvider: EthereumProviderLike | undefined =
+    window.ethereum || window.privyProvider;
   if (!privyProvider) {
-    const privy = (window as any).privy;
+    const privy = window.privy;
     if (privy && privy.getEthereumProvider) {
       const provider = await privy.getEthereumProvider();
       if (provider) {

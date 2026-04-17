@@ -18,6 +18,9 @@ import {
 } from "../blockchain/contractService";
 import { getServerWalletAddress } from "../blockchain/walletService";
 import type { Address } from "viem";
+import { createLogger } from "../utils/logger";
+
+const logger = createLogger("api/contractRoutes");
 
 function errorResponse(message: string, status = 400): Response {
   return Response.json({ error: message }, { status });
@@ -66,6 +69,7 @@ export async function handlePrepareCreateGame(
 
     // Prepare transaction
     const txData = prepareCreateGameTransaction(gameId, game.stake);
+    logger.info("Prepared create-game transaction", { gameId, userId, stake: game.stake });
 
     return jsonResponse({
       transaction: txData,
@@ -114,6 +118,7 @@ export async function handlePrepareJoinGame(
 
     // Prepare transaction
     const txData = prepareJoinGameTransaction(contractGameId);
+    logger.info("Prepared join-game transaction", { gameId, userId, contractGameId });
 
     return jsonResponse({
       transaction: txData,
@@ -170,6 +175,7 @@ export async function handlePrepareBet(
 
     // Prepare transaction
     const txData = prepareDepositBetTransaction(contractGameId, amount);
+    logger.info("Prepared deposit-bet transaction", { gameId, userId, contractGameId, amount });
 
     return jsonResponse({
       transaction: txData,
@@ -222,7 +228,14 @@ export async function handlePayoutWinner(
     const txHash = await payoutWinner(contractGameId, winnerAddress as Address, amount);
 
     // Update database with transaction hash
-    // TODO: Update game record with payout_tx_hash
+    gameRepo.setPayoutTxHash(db, gameId, txHash);
+    logger.info("Recorded payout transaction", {
+      gameId,
+      contractGameId,
+      winnerAddress,
+      amount,
+      txHash,
+    });
 
     return jsonResponse({
       success: true,
@@ -265,6 +278,7 @@ export async function handleCancelGame(
 
     // Cancel game
     const txHash = await cancelGame(contractGameId);
+    logger.info("Cancelled game on contract", { gameId, contractGameId, txHash });
 
     return jsonResponse({
       success: true,

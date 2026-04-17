@@ -8,6 +8,9 @@
 import { createWalletClient, http, type Address } from "viem";
 import { baseSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
+import { createLogger } from "../utils/logger";
+
+const logger = createLogger("blockchain/walletService");
 
 /**
  * Get the server wallet address
@@ -19,6 +22,7 @@ export function getServerWalletAddress(): Address {
   }
 
   const account = privateKeyToAccount(privateKey as `0x${string}`);
+  logger.debug("Resolved server wallet address", { address: account.address });
   return account.address;
 }
 
@@ -33,6 +37,11 @@ export function getServerWalletClient() {
 
   const account = privateKeyToAccount(privateKey as `0x${string}`);
   const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
+  logger.info("Creating server wallet client", {
+    address: account.address,
+    chain: baseSepolia.id,
+    rpcHost: new URL(rpcUrl).host,
+  });
 
   return createWalletClient({
     account,

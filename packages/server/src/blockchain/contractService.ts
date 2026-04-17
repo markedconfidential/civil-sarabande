@@ -18,6 +18,9 @@ import {
 } from "viem";
 import { baseSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
+import { createLogger } from "../utils/logger";
+
+const logger = createLogger("blockchain/contractService");
 
 // GameEscrow ABI (minimal interface for the functions we need)
 const GAME_ESCROW_ABI = [
@@ -160,6 +163,7 @@ export async function getGameBalance(gameId: `0x${string}`): Promise<string> {
   const contractAddress = getContractAddress();
 
   try {
+    logger.debug("Reading game balance from contract", { gameId, contractAddress });
     const balance = await client.readContract({
       address: contractAddress,
       abi: GAME_ESCROW_ABI,
@@ -169,7 +173,7 @@ export async function getGameBalance(gameId: `0x${string}`): Promise<string> {
 
     return formatUnits(balance, USDC_DECIMALS);
   } catch (error) {
-    console.error("Failed to get game balance:", error);
+    logger.error("Failed to get game balance from contract", { gameId, error });
     throw new Error("Failed to get game balance from contract");
   }
 }
@@ -182,6 +186,7 @@ export async function getGameState(gameId: `0x${string}`) {
   const contractAddress = getContractAddress();
 
   try {
+    logger.debug("Reading game state from contract", { gameId, contractAddress });
     const game = await client.readContract({
       address: contractAddress,
       abi: GAME_ESCROW_ABI,
@@ -199,7 +204,7 @@ export async function getGameState(gameId: `0x${string}`) {
       isCancelled: game[6],
     };
   } catch (error) {
-    console.error("Failed to get game state:", error);
+    logger.error("Failed to get game state from contract", { gameId, error });
     throw new Error("Failed to get game state from contract");
   }
 }
@@ -218,6 +223,12 @@ export async function payoutWinner(
   const amountWei = parseUnits(amount.toString(), USDC_DECIMALS);
 
   try {
+    logger.info("Submitting payout transaction", {
+      gameId,
+      winnerAddress,
+      amount,
+      contractAddress,
+    });
     const hash = await client.writeContract({
       address: contractAddress,
       abi: GAME_ESCROW_ABI,
@@ -228,10 +239,11 @@ export async function payoutWinner(
     // Wait for transaction confirmation
     const publicClient = getPublicClient();
     await publicClient.waitForTransactionReceipt({ hash });
+    logger.info("Payout transaction confirmed", { gameId, hash });
 
     return hash;
   } catch (error) {
-    console.error("Failed to payout winner:", error);
+    logger.error("Failed to payout winner on contract", { gameId, winnerAddress, amount, error });
     throw new Error("Failed to payout winner on contract");
   }
 }
@@ -244,6 +256,7 @@ export async function cancelGame(gameId: `0x${string}`): Promise<Hash> {
   const contractAddress = getContractAddress();
 
   try {
+    logger.info("Submitting cancel transaction", { gameId, contractAddress });
     const hash = await client.writeContract({
       address: contractAddress,
       abi: GAME_ESCROW_ABI,
@@ -254,10 +267,11 @@ export async function cancelGame(gameId: `0x${string}`): Promise<Hash> {
     // Wait for transaction confirmation
     const publicClient = getPublicClient();
     await publicClient.waitForTransactionReceipt({ hash });
+    logger.info("Cancel transaction confirmed", { gameId, hash });
 
     return hash;
   } catch (error) {
-    console.error("Failed to cancel game:", error);
+    logger.error("Failed to cancel game on contract", { gameId, error });
     throw new Error("Failed to cancel game on contract");
   }
 }

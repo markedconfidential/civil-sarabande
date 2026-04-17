@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { authStore } from '$lib/auth';
+	import type { Root } from 'react-dom/client';
+	import type { PrivyEvent } from './types';
 
 	let container: HTMLDivElement;
-	let root: any = null;
+	let root: Root | null = null;
 
 	onMount(async () => {
 		// Dynamically import React and the Privy provider
@@ -12,7 +14,7 @@
 				// Create root and render
 				root = ReactDOM.createRoot(container);
 
-				const handleEvent = (event: any) => {
+				const handleEvent = (event: PrivyEvent) => {
 					switch (event.type) {
 						case 'ready':
 							authStore.setLoading(false);
