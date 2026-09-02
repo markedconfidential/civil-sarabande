@@ -34,6 +34,10 @@
   --color-error: #a84545;
   --color-warning: #c9a227;
   
+  /* Board sizing */
+  --board-cell: 60px;
+  --board-head: 40px;
+
   /* Board colors */
   --color-cell-bg: #1a1520;
   --color-cell-border: #3a3040;
@@ -466,8 +470,8 @@ a.btn-danger {
 
 .board th,
 .board td {
-  width: 60px;
-  height: 60px;
+  width: var(--board-cell);
+  height: var(--board-cell);
   text-align: center;
   vertical-align: middle;
   border: 1px solid var(--color-cell-border);
@@ -482,8 +486,8 @@ a.btn-danger {
   color: var(--color-text-dim);
   font-size: 0.875rem;
   font-weight: 400;
-  width: 40px;
-  height: 40px;
+  width: var(--board-head);
+  height: var(--board-head);
 }
 
 .board td {
@@ -988,28 +992,111 @@ a.btn-danger {
    Responsive
    ============================================================================ */
 
+/* Touch-friendly targets on coarse pointers and small screens */
+@media (pointer: coarse), (max-width: 768px) {
+  button,
+  a.btn-primary,
+  a.btn-secondary,
+  a.btn-gold,
+  a.btn-danger,
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  select {
+    min-height: 44px;
+  }
+
+  .btn-sm {
+    min-height: 40px;
+    padding: var(--space-xs) var(--space-md);
+  }
+}
+
 @media (max-width: 768px) {
   :root {
     font-size: 14px;
+    --board-cell: 48px;
+    --board-head: 32px;
   }
 
+  /* Page and container padding nest; keep the total small on phones */
   .page {
+    padding: var(--space-md) var(--space-xs);
+  }
+
+  .container {
+    padding: var(--space-sm);
+  }
+
+  .card,
+  .action-panel {
     padding: var(--space-md);
   }
 
+  /* Compact three-up players bar: you | pot | them */
   .players-bar {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
   }
 
-  .board th,
+  .player-card {
+    padding: var(--space-sm);
+    min-width: 0;
+  }
+
+  .player-name {
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .player-coins {
+    font-size: 0.8rem;
+  }
+
+  .pot-display {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .pot-label {
+    font-size: 0.65rem;
+  }
+
+  .pot-value {
+    font-size: 1.6rem;
+  }
+
   .board td {
-    width: 48px;
-    height: 48px;
     font-size: 1rem;
+  }
+
+  .action-buttons button {
+    flex: 1 1 auto;
   }
 
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    /* Fit six cells plus the header column within the viewport */
+    --board-cell: min(48px, calc((100vw - 72px) / 6));
+    --board-head: 28px;
+  }
+
+  .phase-indicator {
+    padding: var(--space-xs) var(--space-md);
+    font-size: 0.75rem;
+  }
+
+  .score-preview {
+    gap: var(--space-lg);
   }
 }
 

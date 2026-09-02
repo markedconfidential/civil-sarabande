@@ -36,12 +36,21 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--space-sm);
 		margin-bottom: var(--space-lg);
 	}
 
 	.header-actions {
 		display: flex;
 		align-items: center;
-		gap: var(--space-md);
+		gap: var(--space-sm);
+		margin-left: auto;
+	}
+
+	@media (max-width: 768px) {
+		.game-header {
+			margin-bottom: var(--space-md);
+		}
 	}
 </style>

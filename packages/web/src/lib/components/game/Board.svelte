@@ -108,9 +108,17 @@
 
 	.board-legend {
 		display: flex;
-		gap: var(--space-lg);
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-sm) var(--space-lg);
 		font-size: 0.8rem;
 		color: var(--color-text-dim);
+	}
+
+	@media (max-width: 768px) {
+		.board-container {
+			gap: var(--space-md);
+		}
 	}
 
 	.legend-item {
