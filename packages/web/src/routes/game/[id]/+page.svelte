@@ -37,6 +37,7 @@
 	import RoundEndPanel from '$lib/components/game/RoundEndPanel.svelte';
 	import GameOverPanel from '$lib/components/game/GameOverPanel.svelte';
 	import MoveHistory from '$lib/components/game/MoveHistory.svelte';
+	import { panelIn, quickFade } from '$lib/motion';
 
 	let game: GameStateView | null = null;
 	let loading = true;
@@ -175,6 +176,13 @@
 	$: scores = game ? calculateScores(game) : { yourScore: 0, theirScore: 0 };
 	$: moveAllowed = game ? canMakeMove(game) : false;
 	$: boardPreview = moveAllowed ? { column: selfColumn, row: otherRow } : null;
+
+	// Identifies which action panel is showing. When it changes, the panel
+	// re-mounts and plays its entrance so every phase change has motion,
+	// including the switch between "your turn" and "waiting on opponent".
+	$: panelKey = game
+		? [game.phase, moveAllowed, canMakeBet(game), canReveal(game)].join(':')
+		: '';
 </script>
 
 {#if loading && !game}
@@ -188,7 +196,7 @@
 		<a href="/" class="btn-secondary">Return Home</a>
 	</div>
 {:else}
-	<div class="container game-container">
+	<div class="container game-container" in:quickFade>
 		<GameHeader
 			phase={game.phase}
 			roundNumber={game.roundNumber}
@@ -198,7 +206,7 @@
 		/>
 
 		{#if actionError}
-			<div class="alert alert--error">{actionError}</div>
+			<div class="alert alert--error" transition:quickFade>{actionError}</div>
 		{/if}
 
 		<PlayersBar {game} />
@@ -206,6 +214,8 @@
 		<Board {game} preview={boardPreview} />
 
 		<div class="action-panel">
+			{#key panelKey}
+			<div class="panel-body" in:panelIn>
 			{#if game.phase === 'waiting'}
 				<WaitingState message="Waiting for opponent to join">
 					<p class="game-id-display">
@@ -260,6 +270,8 @@
 			{:else}
 				<WaitingState message="Waiting for opponent" />
 			{/if}
+			</div>
+			{/key}
 		</div>
 
 		<MoveHistory yourMoves={game.yourMoves} theirMoves={game.theirMoves} />

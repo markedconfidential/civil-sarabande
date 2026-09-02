@@ -51,6 +51,12 @@
 
 	@media (max-width: 600px) {
 		.move-selectors {
+			gap: var(--space-md);
+		}
+	}
+
+	@media (max-width: 360px) {
+		.move-selectors {
 			grid-template-columns: 1fr;
 		}
 	}

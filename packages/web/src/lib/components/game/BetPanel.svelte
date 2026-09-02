@@ -100,7 +100,21 @@
 
 	@media (max-width: 600px) {
 		.betting-info {
-			flex-direction: column;
+			display: grid;
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: var(--space-sm);
+		}
+
+		.bet-stat {
+			padding: var(--space-sm) var(--space-xs);
+		}
+
+		.bet-stat-label {
+			font-size: 0.65rem;
+		}
+
+		.bet-stat-value {
+			font-size: 1.25rem;
 		}
 	}
 </style>

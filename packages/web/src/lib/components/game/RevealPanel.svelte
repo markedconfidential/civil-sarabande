@@ -37,6 +37,7 @@
 
 	.reveal-columns {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-md);
 		justify-content: center;
 	}
@@ -73,7 +74,13 @@
 
 	@media (max-width: 600px) {
 		.reveal-columns {
-			flex-direction: column;
+			gap: var(--space-sm);
+		}
+
+		.column-choice {
+			flex: 1 1 calc(33% - var(--space-sm));
+			min-height: 44px;
+			padding: var(--space-sm);
 		}
 	}
 </style>

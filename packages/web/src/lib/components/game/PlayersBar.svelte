@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { GameStateView } from '@civil-sarabande/shared';
+	import { popIn, quickFade } from '$lib/motion';
 
 	export let game: GameStateView;
 
@@ -15,16 +16,22 @@
 			{yourName}
 			<span class="player-tag">You</span>
 		</div>
-		<div class="player-coins">{game.yourCoins} coins</div>
+		{#key game.yourCoins}
+			<div class="player-coins" in:quickFade>{game.yourCoins} coins</div>
+		{/key}
 	</div>
 
 	<div class="pot-display">
 		<div class="pot-label">Total Pot</div>
-		<div class="pot-value">{totalPot}</div>
+		{#key totalPot}
+			<div class="pot-value" in:popIn>{totalPot}</div>
+		{/key}
 	</div>
 
 	<div class="player-card player-card--opponent">
 		<div class="player-name">{theirName}</div>
-		<div class="player-coins">{game.theirCoins} coins</div>
+		{#key game.theirCoins}
+			<div class="player-coins" in:quickFade>{game.theirCoins} coins</div>
+		{/key}
 	</div>
 </div>
