@@ -7,6 +7,7 @@
 		getChosenColumns,
 		type CellPreview
 	} from '$lib/game/selectors';
+	import { popIn, quickFade } from '$lib/motion';
 
 	export let game: GameStateView;
 	/** Column/row the player is composing; null when it is not their turn to move. */
@@ -43,14 +44,18 @@
 	</table>
 
 	{#if showScores}
-		<div class="score-preview">
+		<div class="score-preview" transition:quickFade>
 			<div class="score-item">
 				<div class="score-label">Your Score</div>
-				<div class="score-value score-value--you">{scores.yourScore}</div>
+				{#key scores.yourScore}
+					<div class="score-value score-value--you" in:popIn>{scores.yourScore}</div>
+				{/key}
 			</div>
 			<div class="score-item">
 				<div class="score-label">Their Score</div>
-				<div class="score-value score-value--them">{scores.theirScore}</div>
+				{#key scores.theirScore}
+					<div class="score-value score-value--them" in:popIn>{scores.theirScore}</div>
+				{/key}
 			</div>
 		</div>
 	{/if}

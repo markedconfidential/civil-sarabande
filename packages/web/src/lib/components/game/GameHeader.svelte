@@ -2,6 +2,7 @@
 	import { createEventDispatcher } from 'svelte';
 	import type { GamePhase } from '@civil-sarabande/shared';
 	import { getPhaseDisplayName } from '$lib/game/phases';
+	import { quickFade } from '$lib/motion';
 
 	export let phase: GamePhase;
 	export let roundNumber: number;
@@ -13,8 +14,12 @@
 
 <header class="game-header">
 	<div class="phase-indicator">
-		<span class="phase-name">{getPhaseDisplayName(phase)}</span>
-		<span class="round-num">Round {roundNumber}</span>
+		{#key phase}
+			<span class="phase-name" in:quickFade>{getPhaseDisplayName(phase)}</span>
+		{/key}
+		{#key roundNumber}
+			<span class="round-num" in:quickFade>Round {roundNumber}</span>
+		{/key}
 	</div>
 	<div class="header-actions">
 		<span class="status-badge status-badge--{connectionStatus}">

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import type { Scores } from '$lib/game/selectors';
+	import { panelIn, popIn } from '$lib/motion';
 
 	export let scores: Scores;
 	export let canEndRound = false;
@@ -14,17 +15,17 @@
 
 <div class="round-result">
 	<div class="final-scores">
-		<div class="final-score">
+		<div class="final-score" in:popIn={{ delay: 100 }}>
 			<span class="final-score-label">Your Score</span>
 			<span class="final-score-value final-score-value--you">{scores.yourScore}</span>
 		</div>
-		<div class="final-score">
+		<div class="final-score" in:popIn={{ delay: 250 }}>
 			<span class="final-score-label">Their Score</span>
 			<span class="final-score-value final-score-value--them">{scores.theirScore}</span>
 		</div>
 	</div>
 
-	<div class="winner-announcement">
+	<div class="winner-announcement" in:popIn={{ delay: 500, duration: 320 }}>
 		{#if scores.yourScore > scores.theirScore}
 			<span class="winner-text winner-text--you">You won!</span>
 		{:else if scores.theirScore > scores.yourScore}
@@ -35,7 +36,7 @@
 	</div>
 </div>
 
-<div class="action-buttons">
+<div class="action-buttons" in:panelIn={{ delay: 800 }}>
 	{#if canEndRound}
 		<button
 			type="button"
