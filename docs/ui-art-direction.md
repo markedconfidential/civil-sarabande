@@ -67,6 +67,8 @@ These are what a screenshot of the game is built around.
 
 Before commissioning anything, produce one reference sheet: sprite scale (e.g. 2×), palette (8–16 colors), watercolor texture sample, one sample suited glyph, one sample JRPG window, one sample sigil. Every asset afterward is QA'd against this sheet. It is cheap and prevents style drift.
 
+**Status: done.** The written spec is `docs/art-bible.md`; the living specimen page is `/design` in the web app.
+
 ## Engineering work that needs no new art (run in parallel)
 
 - **Unify onboarding/funding pages with the theme.** `routes/onboarding/+page.svelte` and `routes/funding/+page.svelte` use off-palette colors (`#7c3aed`, `#666`); migrate to `app.css` variables.
