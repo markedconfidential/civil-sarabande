@@ -75,31 +75,42 @@ const USDC_CONTRACT_ADDRESS = import.meta.env.VITE_USDC_CONTRACT_ADDRESS as Addr
  * Note: This requires the Privy provider to be available via useWallets hook
  * For now, we'll get it from the Privy React context
  */
-async function getWalletClient() {
+async function getProvider(): Promise<EthereumProviderLike> {
   // Try to get provider from Privy
   // Privy exposes the provider through the useWallets hook
   // For contract interactions, we need to use Privy's wallet connection
   const privyProvider: EthereumProviderLike | undefined =
     window.ethereum || window.privyProvider;
-  
-  if (!privyProvider) {
-    // Fallback: try to get from Privy's embedded wallet
-    const privy = window.privy;
-    if (privy && privy.getEthereumProvider) {
-      const provider = await privy.getEthereumProvider();
-      if (provider) {
-        return createWalletClient({
-          chain: baseSepolia,
-          transport: custom(provider),
-        });
-      }
+
+  if (privyProvider) {
+    return privyProvider;
+  }
+
+  // Fallback: try to get from Privy's embedded wallet
+  const privy = window.privy;
+  if (privy && privy.getEthereumProvider) {
+    const provider = await privy.getEthereumProvider();
+    if (provider) {
+      return provider;
     }
-    throw new Error("Wallet not connected. Please connect your wallet first.");
+  }
+  throw new Error("Wallet not connected. Please connect your wallet first.");
+}
+
+async function getWalletClient() {
+  const provider = await getProvider();
+  const transport = custom(provider);
+
+  // viem requires an account on the client to send transactions
+  const [account] = await createWalletClient({ chain: baseSepolia, transport }).requestAddresses();
+  if (!account) {
+    throw new Error("Wallet has no accounts. Please connect your wallet first.");
   }
 
   return createWalletClient({
+    account,
     chain: baseSepolia,
-    transport: custom(privyProvider),
+    transport,
   });
 }
 

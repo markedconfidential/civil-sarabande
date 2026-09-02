@@ -63,7 +63,7 @@ export async function handlePrepareCreateGame(
     }
 
     // Check if contract game already exists
-    if (game.contractGameId) {
+    if (gameRepo.getContractGameId(db, gameId)) {
       return errorResponse("Game already has contract transaction", 400);
     }
 
