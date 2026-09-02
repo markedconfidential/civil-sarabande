@@ -195,13 +195,13 @@ export async function getGameState(gameId: `0x${string}`) {
     });
 
     return {
-      player1: game[0],
-      player2: game[1],
-      stake: formatUnits(game[2], USDC_DECIMALS),
-      player1Deposits: formatUnits(game[3], USDC_DECIMALS),
-      player2Deposits: formatUnits(game[4], USDC_DECIMALS),
-      isActive: game[5],
-      isCancelled: game[6],
+      player1: game.player1,
+      player2: game.player2,
+      stake: formatUnits(game.stake, USDC_DECIMALS),
+      player1Deposits: formatUnits(game.player1Deposits, USDC_DECIMALS),
+      player2Deposits: formatUnits(game.player2Deposits, USDC_DECIMALS),
+      isActive: game.isActive,
+      isCancelled: game.isCancelled,
     };
   } catch (error) {
     logger.error("Failed to get game state from contract", { gameId, error });

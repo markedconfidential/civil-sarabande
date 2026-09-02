@@ -272,6 +272,15 @@ export function getPayoutTxHash(db: Database, gameId: string): string | null {
 }
 
 /**
+ * Get the on-chain contract game id for a game, if one has been recorded.
+ */
+export function getContractGameId(db: Database, gameId: string): string | null {
+  const stmt = db.prepare("SELECT contract_game_id FROM games WHERE game_id = ?");
+  const row = stmt.get(gameId) as { contract_game_id: string | null } | undefined;
+  return row?.contract_game_id ?? null;
+}
+
+/**
  * Set the payout transaction hash for a game.
  */
 export function setPayoutTxHash(db: Database, gameId: string, txHash: string): void {
