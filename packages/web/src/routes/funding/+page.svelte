@@ -71,227 +71,153 @@
 	<title>Fund Your Wallet - Civil Sarabande</title>
 </svelte:head>
 
-<div class="container">
-	<h1>Fund Your Wallet</h1>
+<div class="container container--medium">
+	<header class="page-header">
+		<h1>Fund Your Wallet</h1>
+		<p class="page-subtitle">USDC on Base is the only coin at this table</p>
+	</header>
 
 	{#if $isLoading}
-		<p>Loading...</p>
+		<div class="loading">
+			<div class="loading-spinner"></div>
+			<p>Loading...</p>
+		</div>
 	{:else if !$isAuthenticated}
-		<div class="auth-section">
+		<div class="card auth-card">
+			<h2>Welcome</h2>
 			<p>Please sign in to access your wallet.</p>
-			<button type="button" on:click={login} class="primary-button"> Sign In </button>
+			<button type="button" on:click={login} class="btn-gold btn-lg">Sign In</button>
 		</div>
 	{:else}
-		<div class="wallet-section">
+		<div class="card">
 			<h2>Your Wallet</h2>
 
 			{#if $walletAddress}
-				<div class="wallet-address">
-					<span class="label-text">Wallet Address (Base Network)</span>
+				<div class="form-group">
+					<label for="wallet-address">Wallet Address (Base Network)</label>
 					<div class="address-row">
-						<code>{$walletAddress}</code>
-						<button type="button" on:click={copyAddress} class="copy-button">
-							{copied ? 'Copied!' : 'Copy'}
+						<code id="wallet-address" class="code-box">{$walletAddress}</code>
+						<button type="button" on:click={copyAddress} class="btn-secondary btn-sm">
+							{copied ? 'Copied' : 'Copy'}
 						</button>
 					</div>
 				</div>
 			{:else}
-				<p class="warning">No wallet address found. Please refresh the page.</p>
+				<div class="alert alert--warning">No wallet address found. Please refresh the page.</div>
 			{/if}
 
-			<div class="balance-section">
-				<h3>USDC Balance</h3>
+			<div class="stat-box balance-box">
+				<div class="stat-label">USDC Balance</div>
 				{#if loadingBalance}
-					<p>Loading balance...</p>
+					<div class="stat-value stat-value--dim">Loading...</div>
 				{:else if error}
-					<p class="error">{error}</p>
-					<button type="button" on:click={fetchBalance} class="secondary-button">
-						Retry
-					</button>
+					<div class="alert alert--error">{error}</div>
+					<button type="button" on:click={fetchBalance} class="btn-secondary btn-sm">Retry</button>
 				{:else if balance !== null}
-					<p class="balance">{balance} USDC</p>
-					<button type="button" on:click={fetchBalance} class="secondary-button">
-						Refresh
-					</button>
+					<div class="stat-value stat-value--gold">{balance} <span class="unit">USDC</span></div>
+					<button type="button" on:click={fetchBalance} class="btn-secondary btn-sm">Refresh</button>
 				{/if}
 			</div>
+		</div>
 
-			<div class="instructions">
-				<h3>How to Fund Your Wallet</h3>
-				<ol>
-					<li>
+		<div class="card">
+			<h2>How to Fund Your Wallet</h2>
+			<ol class="steps">
+				<li class="step">
+					<span class="step-num">1</span>
+					<div>
 						<strong>Get USDC on Base Network</strong>
 						<p>
 							You can purchase USDC on exchanges like Coinbase or Binance, then withdraw to your
 							wallet address on the Base network.
 						</p>
-					</li>
-					<li>
+					</div>
+				</li>
+				<li class="step">
+					<span class="step-num">2</span>
+					<div>
 						<strong>Bridge USDC to Base</strong>
 						<p>
 							If you have USDC on another network (Ethereum, Polygon, etc.), you can use a bridge
 							like <a href="https://bridge.base.org" target="_blank" rel="noopener">Base Bridge</a> to
 							transfer it to Base.
 						</p>
-					</li>
-					<li>
+					</div>
+				</li>
+				<li class="step">
+					<span class="step-num">3</span>
+					<div>
 						<strong>Send to Your Wallet Address</strong>
 						<p>Copy your wallet address above and send USDC on the Base network to it.</p>
-					</li>
-				</ol>
+					</div>
+				</li>
+			</ol>
 
-				<div class="warning-box">
-					<strong>Important:</strong> Only send USDC on the Base network to this address. Sending other
-					tokens or using the wrong network may result in lost funds.
-				</div>
+			<div class="alert alert--warning network-warning">
+				<strong>Important:</strong> Only send USDC on the Base network to this address. Sending
+				other tokens or using the wrong network may result in lost funds.
 			</div>
+		</div>
 
-			<div class="actions">
-				<a href="/" class="secondary-button">Back to Home</a>
-			</div>
+		<div class="actions">
+			<a href="/" class="btn-secondary">Back to Home</a>
 		</div>
 	{/if}
 </div>
 
 <style>
-	.container {
-		max-width: 600px;
-		margin: 2rem auto;
-		padding: 1rem;
-	}
-
-	h1 {
+	.auth-card {
 		text-align: center;
-		margin-bottom: 2rem;
 	}
 
-	.auth-section {
-		text-align: center;
-		margin: 2rem 0;
-	}
-
-	.wallet-section {
-		background: #f9f9f9;
-		padding: 1.5rem;
-		border-radius: 12px;
-	}
-
-	.wallet-address {
-		margin: 1rem 0;
-	}
-
-	.wallet-address .label-text {
-		display: block;
-		font-weight: bold;
-		margin-bottom: 0.5rem;
+	.auth-card p {
+		color: var(--color-text-dim);
+		margin-bottom: var(--space-lg);
 	}
 
 	.address-row {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--space-sm);
+		align-items: stretch;
+	}
+
+	.address-row .code-box {
+		flex: 1;
+		display: flex;
 		align-items: center;
 	}
 
-	.address-row code {
-		flex: 1;
-		padding: 0.75rem;
-		background: #e5e5e5;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		word-break: break-all;
+	.balance-box {
+		margin-top: var(--space-lg);
 	}
 
-	.balance-section {
-		margin: 2rem 0;
-		padding: 1rem;
-		background: white;
-		border-radius: 8px;
-		text-align: center;
+	.balance-box .stat-value {
+		margin-bottom: var(--space-md);
 	}
 
-	.balance {
-		font-size: 2rem;
-		font-weight: bold;
-		color: #22c55e;
-		margin: 1rem 0;
+	.stat-value--dim {
+		color: var(--color-text-dim);
 	}
 
-	.instructions {
-		margin: 2rem 0;
+	.unit {
+		font-size: 0.9rem;
+		font-weight: 400;
+		color: var(--color-gold-dim);
+		letter-spacing: 0.1em;
 	}
 
-	.instructions ol {
-		padding-left: 1.5rem;
-	}
-
-	.instructions li {
-		margin: 1rem 0;
-	}
-
-	.instructions p {
-		margin-top: 0.5rem;
-		color: #666;
-	}
-
-	.instructions a {
-		color: #7c3aed;
-	}
-
-	.warning-box {
-		margin-top: 1.5rem;
-		padding: 1rem;
-		background: #fef3c7;
-		border: 1px solid #f59e0b;
-		border-radius: 8px;
-		color: #92400e;
-	}
-
-	.warning {
-		color: #f59e0b;
-	}
-
-	.error {
-		color: #ef4444;
+	.network-warning {
+		margin-top: var(--space-xl);
+		margin-bottom: 0;
 	}
 
 	.actions {
-		margin-top: 2rem;
 		text-align: center;
 	}
 
-	.primary-button {
-		padding: 0.75rem 1.5rem;
-		font-size: 1rem;
-		font-weight: bold;
-		color: white;
-		background-color: #7c3aed;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-		text-decoration: none;
-	}
-
-	.secondary-button {
-		padding: 0.5rem 1rem;
-		font-size: 0.875rem;
-		color: #333;
-		background-color: #e5e5e5;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-		text-decoration: none;
-		display: inline-block;
-	}
-
-	.copy-button {
-		padding: 0.5rem 1rem;
-		font-size: 0.75rem;
-		color: white;
-		background-color: #7c3aed;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-		white-space: nowrap;
+	@media (max-width: 600px) {
+		.address-row {
+			flex-direction: column;
+		}
 	}
 </style>
-

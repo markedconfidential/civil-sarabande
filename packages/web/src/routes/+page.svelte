@@ -138,9 +138,9 @@
 </svelte:head>
 
 <div class="container">
-	<header class="home-header">
+	<header class="page-header">
 		<h1>Civil Sarabande</h1>
-		<p class="subtitle">A game of numbers, nerves, and nuance</p>
+		<p class="page-subtitle">A game of numbers, nerves, and nuance</p>
 	</header>
 
 	{#if error}
@@ -206,30 +206,30 @@
 		<!-- How to Play -->
 		<div class="card how-to-play">
 			<h2>How to Play</h2>
-			<div class="rules-grid">
-				<div class="rule">
-					<span class="rule-num">1</span>
+			<div class="steps steps--grid">
+				<div class="step">
+					<span class="step-num">1</span>
 					<div>
 						<strong>Choose Columns</strong>
 						<p>Pick columns for yourself to determine which cells score for you.</p>
 					</div>
 				</div>
-				<div class="rule">
-					<span class="rule-num">2</span>
+				<div class="step">
+					<span class="step-num">2</span>
 					<div>
 						<strong>Assign Rows</strong>
 						<p>Assign rows to your opponent, determining which cells score for them.</p>
 					</div>
 				</div>
-				<div class="rule">
-					<span class="rule-num">3</span>
+				<div class="step">
+					<span class="step-num">3</span>
 					<div>
 						<strong>Place Bets</strong>
 						<p>Between each move, bet on your hand. Call, raise, or fold.</p>
 					</div>
 				</div>
-				<div class="rule">
-					<span class="rule-num">4</span>
+				<div class="step">
+					<span class="step-num">4</span>
 					<div>
 						<strong>Reveal & Score</strong>
 						<p>Reveal one column to score. Highest total wins the pot.</p>
@@ -315,30 +315,30 @@
 		<!-- How to Play -->
 		<div class="card how-to-play">
 			<h2>How to Play</h2>
-			<div class="rules-grid">
-				<div class="rule">
-					<span class="rule-num">1</span>
+			<div class="steps steps--grid">
+				<div class="step">
+					<span class="step-num">1</span>
 					<div>
 						<strong>Choose Columns</strong>
 						<p>Pick columns for yourself to determine which cells score for you.</p>
 					</div>
 				</div>
-				<div class="rule">
-					<span class="rule-num">2</span>
+				<div class="step">
+					<span class="step-num">2</span>
 					<div>
 						<strong>Assign Rows</strong>
 						<p>Assign rows to your opponent, determining which cells score for them.</p>
 					</div>
 				</div>
-				<div class="rule">
-					<span class="rule-num">3</span>
+				<div class="step">
+					<span class="step-num">3</span>
 					<div>
 						<strong>Place Bets</strong>
 						<p>Between each move, bet on your hand. Call, raise, or fold.</p>
 					</div>
 				</div>
-				<div class="rule">
-					<span class="rule-num">4</span>
+				<div class="step">
+					<span class="step-num">4</span>
 					<div>
 						<strong>Reveal & Score</strong>
 						<p>Reveal one column to score. Highest total wins the pot.</p>
@@ -350,17 +350,6 @@
 </div>
 
 <style>
-	.home-header {
-		text-align: center;
-		margin-bottom: var(--space-2xl);
-	}
-
-	.subtitle {
-		color: var(--color-text-dim);
-		font-style: italic;
-		font-size: 1.1rem;
-	}
-
 	.auth-section {
 		text-align: center;
 		max-width: 400px;
@@ -417,37 +406,5 @@
 
 	.how-to-play {
 		margin-top: var(--space-lg);
-	}
-
-	.rules-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: var(--space-lg);
-	}
-
-	.rule {
-		display: flex;
-		gap: var(--space-md);
-		align-items: flex-start;
-	}
-
-	.rule-num {
-		flex-shrink: 0;
-		width: 32px;
-		height: 32px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--color-primary-dark);
-		color: var(--color-gold);
-		border-radius: 50%;
-		font-family: var(--font-display);
-		font-weight: 700;
-	}
-
-	.rule p {
-		margin: var(--space-xs) 0 0 0;
-		color: var(--color-text-dim);
-		font-size: 0.9rem;
 	}
 </style>

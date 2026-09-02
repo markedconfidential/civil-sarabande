@@ -165,23 +165,32 @@
 	<title>Create Your Account - Civil Sarabande</title>
 </svelte:head>
 
-<div class="onboarding-container">
-	<h1>Welcome to Civil Sarabande</h1>
+<div class="container container--narrow">
+	<header class="page-header">
+		<h1>Civil Sarabande</h1>
+		<p class="page-subtitle">Take a name before you take a seat</p>
+	</header>
 
 	{#if $isLoading}
-		<p>Loading...</p>
+		<div class="loading">
+			<div class="loading-spinner"></div>
+			<p>Loading...</p>
+		</div>
 	{:else if !$isAuthenticated}
-		<div class="login-section">
+		<div class="card auth-card">
+			<h2>Welcome</h2>
 			<p>Sign in to create your account and start playing.</p>
-			<button type="button" on:click={login} class="primary-button"> Sign In with Email or Phone </button>
+			<button type="button" on:click={login} class="btn-gold btn-lg btn-block">
+				Sign In with Email or Phone
+			</button>
 		</div>
 	{:else}
-		<div class="username-section">
+		<div class="card">
 			<h2>Choose Your Username</h2>
-			<p>This will be visible to other players.</p>
+			<p class="card-intro">This will be visible to other players.</p>
 
 			<form on:submit|preventDefault={handleSubmit}>
-				<div class="input-group">
+				<div class="form-group">
 					<label for="username">Username</label>
 					<input
 						type="text"
@@ -197,23 +206,23 @@
 					/>
 
 					{#if checking}
-						<span class="status checking">Checking...</span>
+						<span class="field-status field-status--pending">Checking...</span>
 					{:else if isAvailable === true}
-						<span class="status available">Available!</span>
+						<span class="field-status field-status--ok">Available</span>
 					{:else if isAvailable === false}
-						<span class="status taken">Username taken</span>
+						<span class="field-status field-status--error">Username taken</span>
 					{/if}
+
+					<p class="field-hint">3-20 characters, letters, numbers, and underscores only</p>
 				</div>
 
-				<p class="hint">3-20 characters, letters, numbers, and underscores only</p>
-
 				{#if error}
-					<p class="error">{error}</p>
+					<div class="alert alert--error">{error}</div>
 				{/if}
 
 				<button
 					type="submit"
-					class="primary-button"
+					class="btn-primary btn-lg btn-block"
 					disabled={saving || !isAvailable || username.length < 3}
 				>
 					{saving ? 'Creating Account...' : 'Create Account'}
@@ -224,100 +233,13 @@
 </div>
 
 <style>
-	.onboarding-container {
-		max-width: 400px;
-		margin: 2rem auto;
-		padding: 2rem;
+	.auth-card {
 		text-align: center;
 	}
 
-	h1 {
-		margin-bottom: 1.5rem;
-	}
-
-	h2 {
-		margin-bottom: 0.5rem;
-	}
-
-	.login-section,
-	.username-section {
-		margin-top: 2rem;
-	}
-
-	.input-group {
-		margin: 1rem 0;
-		text-align: left;
-	}
-
-	label {
-		display: block;
-		margin-bottom: 0.5rem;
-		font-weight: bold;
-	}
-
-	input {
-		width: 100%;
-		padding: 0.75rem;
-		font-size: 1rem;
-		border: 1px solid #ccc;
-		border-radius: 4px;
-		box-sizing: border-box;
-	}
-
-	input:focus {
-		outline: none;
-		border-color: #7c3aed;
-	}
-
-	.status {
-		display: block;
-		margin-top: 0.5rem;
-		font-size: 0.875rem;
-	}
-
-	.status.checking {
-		color: #666;
-	}
-
-	.status.available {
-		color: #22c55e;
-	}
-
-	.status.taken {
-		color: #ef4444;
-	}
-
-	.hint {
-		font-size: 0.875rem;
-		color: #666;
-		text-align: left;
-	}
-
-	.error {
-		color: #ef4444;
-		margin: 1rem 0;
-	}
-
-	.primary-button {
-		width: 100%;
-		padding: 0.75rem 1.5rem;
-		font-size: 1rem;
-		font-weight: bold;
-		color: white;
-		background-color: #7c3aed;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-		margin-top: 1rem;
-	}
-
-	.primary-button:hover:not(:disabled) {
-		background-color: #6d28d9;
-	}
-
-	.primary-button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
+	.auth-card p,
+	.card-intro {
+		color: var(--color-text-dim);
+		margin-bottom: var(--space-lg);
 	}
 </style>
-

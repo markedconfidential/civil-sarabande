@@ -302,6 +302,24 @@ button:disabled {
   background: #c25555;
 }
 
+/* Links styled as buttons get the same chrome as <button> */
+a.btn-primary,
+a.btn-secondary,
+a.btn-gold,
+a.btn-danger {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  text-align: center;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
 .btn-sm {
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.75rem;
@@ -310,6 +328,11 @@ button:disabled {
 .btn-lg {
   padding: var(--space-md) var(--space-xl);
   font-size: 1rem;
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
 }
 
 /* ============================================================================
@@ -830,6 +853,110 @@ button:disabled {
 .game-item-stake {
   color: var(--color-gold);
   font-family: var(--font-mono);
+}
+
+/* ============================================================================
+   Page Chrome
+   ============================================================================ */
+
+.page-header {
+  text-align: center;
+  margin-bottom: var(--space-2xl);
+}
+
+.page-subtitle {
+  color: var(--color-text-dim);
+  font-style: italic;
+  font-size: 1.1rem;
+}
+
+.container--narrow {
+  max-width: 480px;
+}
+
+.container--medium {
+  max-width: 680px;
+}
+
+/* Inline code/value display (addresses, ids, hashes) */
+.code-box {
+  display: block;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-dark);
+  border: 1px solid var(--color-cell-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text);
+  word-break: break-all;
+}
+
+/* Form field feedback */
+.field-hint {
+  margin: var(--space-xs) 0 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.field-status {
+  display: block;
+  margin-top: var(--space-xs);
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+
+.field-status--pending {
+  color: var(--color-text-dim);
+}
+
+.field-status--ok {
+  color: var(--color-success);
+}
+
+.field-status--error {
+  color: var(--color-error);
+}
+
+/* Numbered steps */
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.steps--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.step {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+}
+
+.step-num {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-dark);
+  color: var(--color-gold);
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.step p {
+  margin: var(--space-xs) 0 0 0;
+  color: var(--color-text-dim);
+  font-size: 0.9rem;
 }
 
 /* ============================================================================
