@@ -609,6 +609,30 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.action-description {
+  color: var(--color-text-dim);
+  margin-bottom: var(--space-lg);
+}
+
+/* ============================================================================
+   Results (round end / game over)
+   ============================================================================ */
+
+.winner-text {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.winner-text--you {
+  color: var(--color-success);
+}
+
+.winner-text--them {
+  color: var(--color-error);
+}
+
 /* ============================================================================
    Player Info
    ============================================================================ */
