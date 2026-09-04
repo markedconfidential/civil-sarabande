@@ -5,4 +5,6 @@
 
 export * from "./types";
 export * from "./api";
+export * from "./escrowAbi";
+export * from "./settlement";
 

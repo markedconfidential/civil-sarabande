@@ -83,10 +83,69 @@ export interface GameState {
   player2EndedRound: boolean;
   /** Current round number (starts at 1) */
   roundNumber: number;
-  /** Stake amount in smallest currency unit */
+  /** Stake per player in USDC (decimal, e.g. 1.5); see usdcToUnits for base units */
   stake: number;
   /** Timestamp when game was created */
   createdAt: number;
+
+  // ---- escrow -----------------------------------------------------------
+  /** Where the game's funds are in their lifecycle */
+  escrowStatus: EscrowStatus;
+  /** keccak256 of gameId, the key used by the escrow contract */
+  contractGameId: `0x${string}`;
+  /** Settlement transaction hash once settled (or the failed attempt) */
+  payoutTxHash: string | null;
+  /** Settled payouts in USDC base units as decimal strings */
+  player1Payout: string | null;
+  player2Payout: string | null;
+  /** Last settlement error, if any */
+  settlementError: string | null;
+
+  // ---- turn timing --------------------------------------------------------
+  /** Epoch ms by which the awaited player(s) must act; null when no clock runs */
+  phaseDeadline: number | null;
+
+  // ---- results ------------------------------------------------------------
+  /** Result of the most recent completed round; null before the first roundEnd */
+  roundResult: RoundResult | null;
+}
+
+/**
+ * Lifecycle of a game's escrowed funds, as tracked by the server.
+ *
+ * unfunded  → player 1 has a server game but has not deposited on chain
+ * funded    → player 1's stake is escrowed; game is listed and joinable
+ * active    → player 2's stake is escrowed; play is under way
+ * settling  → game ended; settlement transaction in flight
+ * settled   → settlement confirmed on chain
+ * cancelled → refunded before play began
+ * failed    → settlement attempt reverted or errored; will be retried
+ */
+export type EscrowStatus =
+  | "unfunded"
+  | "funded"
+  | "active"
+  | "settling"
+  | "settled"
+  | "cancelled"
+  | "failed";
+
+/**
+ * Sentinel in a MoveList for a value the viewer is not allowed to see yet
+ * (the opponent's own column choices before the round ends).
+ */
+export const HIDDEN_MOVE = -1;
+
+/** Outcome of a completed round, computed server-side from the true moves. */
+export interface RoundResult {
+  roundNumber: number;
+  player1Score: number;
+  player2Score: number;
+  winner: "player1" | "player2" | "tie";
+  /** Coins that moved to the winner (0 on a tie) */
+  potWon: number;
+  /** True when the round ended by a fold rather than a showdown */
+  byFold: boolean;
 }
 
 /**
