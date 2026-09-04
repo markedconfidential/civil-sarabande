@@ -2,12 +2,23 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { isAuthenticated, isLoading, walletAddress } from '$lib/auth';
-	import { login, getAccessToken } from '$lib/privy';
+	import { login } from '$lib/privy';
+	import { addressUrl, chainName, config } from '$lib/config';
+	import { faucet } from '$lib/api';
+	import { getUsdcBalance, toChainErrorMessage } from '$lib/chain';
+	import { DEV_FAUCET_AMOUNT } from '$lib/dev/login';
+	import { unitsToUsdc } from '@civil-sarabande/shared';
+	import type { Address } from 'viem';
+
+	const isDev = config.authMode === 'dev';
+	const isLocal = config.chainId === 31337;
 
 	let balance: string | null = null;
 	let loadingBalance = true;
 	let error: string | null = null;
 	let copied = false;
+	let fauceting = false;
+	let faucetError: string | null = null;
 
 	$: if ($isAuthenticated && $walletAddress && !$isLoading) {
 		fetchBalance();
@@ -24,38 +35,31 @@
 	});
 
 	async function fetchBalance() {
+		if (!$walletAddress) return;
 		loadingBalance = true;
 		error = null;
 
 		try {
-			const token = await getAccessToken();
-			if (!token) {
-				error = 'Failed to get authentication token';
-				loadingBalance = false;
-				return;
-			}
-
-			const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-			const response = await fetch(`${API_URL}/wallet/balance`, {
-				headers: {
-					Authorization: `Bearer ${token}`
-				}
-			});
-
-			if (!response.ok) {
-				const data = await response.json();
-				error = data.error || 'Failed to fetch balance';
-				loadingBalance = false;
-				return;
-			}
-
-			const data = await response.json();
-			balance = data.balance;
+			const units = await getUsdcBalance($walletAddress as Address);
+			balance = unitsToUsdc(units);
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to fetch balance';
+			error = toChainErrorMessage(err);
 		}
 
 		loadingBalance = false;
+	}
+
+	async function requestFaucet() {
+		if (!$walletAddress || fauceting) return;
+		fauceting = true;
+		faucetError = null;
+		try {
+			await faucet($walletAddress, DEV_FAUCET_AMOUNT);
+			await fetchBalance();
+		} catch (err) {
+			faucetError = err instanceof Error ? err.message : 'Faucet failed';
+		}
+		fauceting = false;
 	}
 
 	async function copyAddress() {
@@ -74,7 +78,7 @@
 <div class="container container--medium">
 	<header class="page-header">
 		<h1>Fund Your Wallet</h1>
-		<p class="page-subtitle">USDC on Base is the only coin at this table</p>
+		<p class="page-subtitle">USDC on {chainName()} is the only coin at this table</p>
 	</header>
 
 	{#if $isLoading}
@@ -94,13 +98,18 @@
 
 			{#if $walletAddress}
 				<div class="form-group">
-					<label for="wallet-address">Wallet Address (Base Network)</label>
+					<label for="wallet-address">Wallet Address ({chainName()})</label>
 					<div class="address-row">
 						<code id="wallet-address" class="code-box">{$walletAddress}</code>
 						<button type="button" on:click={copyAddress} class="btn-secondary btn-sm">
 							{copied ? 'Copied' : 'Copy'}
 						</button>
 					</div>
+					{#if addressUrl($walletAddress)}
+						<p class="field-hint">
+							<a href={addressUrl($walletAddress)} target="_blank" rel="noopener">View on explorer</a>
+						</p>
+					{/if}
 				</div>
 			{:else}
 				<div class="alert alert--warning">No wallet address found. Please refresh the page.</div>
@@ -115,49 +124,71 @@
 					<button type="button" on:click={fetchBalance} class="btn-secondary btn-sm">Retry</button>
 				{:else if balance !== null}
 					<div class="stat-value stat-value--gold">{balance} <span class="unit">USDC</span></div>
-					<button type="button" on:click={fetchBalance} class="btn-secondary btn-sm">Refresh</button>
+					<div class="balance-actions">
+						<button type="button" on:click={fetchBalance} class="btn-secondary btn-sm">Refresh</button>
+						{#if isDev}
+							<button
+								type="button"
+								on:click={requestFaucet}
+								class="btn-gold btn-sm"
+								disabled={fauceting}
+							>
+								{fauceting ? 'Minting…' : `Faucet: +${DEV_FAUCET_AMOUNT} USDC`}
+							</button>
+						{/if}
+					</div>
+					{#if faucetError}
+						<div class="alert alert--error">{faucetError}</div>
+					{/if}
 				{/if}
 			</div>
 		</div>
 
-		<div class="card">
-			<h2>How to Fund Your Wallet</h2>
-			<ol class="steps">
-				<li class="step">
-					<span class="step-num">1</span>
-					<div>
-						<strong>Get USDC on Base Network</strong>
-						<p>
-							You can purchase USDC on exchanges like Coinbase or Binance, then withdraw to your
-							wallet address on the Base network.
-						</p>
-					</div>
-				</li>
-				<li class="step">
-					<span class="step-num">2</span>
-					<div>
-						<strong>Bridge USDC to Base</strong>
-						<p>
-							If you have USDC on another network (Ethereum, Polygon, etc.), you can use a bridge
-							like <a href="https://bridge.base.org" target="_blank" rel="noopener">Base Bridge</a> to
-							transfer it to Base.
-						</p>
-					</div>
-				</li>
-				<li class="step">
-					<span class="step-num">3</span>
-					<div>
-						<strong>Send to Your Wallet Address</strong>
-						<p>Copy your wallet address above and send USDC on the Base network to it.</p>
-					</div>
-				</li>
-			</ol>
-
-			<div class="alert alert--warning network-warning">
-				<strong>Important:</strong> Only send USDC on the Base network to this address. Sending
-				other tokens or using the wrong network may result in lost funds.
+		{#if isLocal}
+			<div class="card">
+				<h2>Local chain</h2>
+				<p class="card-intro">
+					You are on a local Anvil chain with mock USDC. There is nothing to bridge: use the
+					faucet above to mint test USDC into this wallet.
+				</p>
 			</div>
-		</div>
+		{:else}
+			<div class="card">
+				<h2>How to Fund Your Wallet</h2>
+				<ol class="steps">
+					<li class="step">
+						<span class="step-num">1</span>
+						<div>
+							<strong>Get test USDC on Base Sepolia</strong>
+							<p>
+								Request Base Sepolia USDC from
+								<a href="https://faucet.circle.com" target="_blank" rel="noopener">Circle's faucet</a>
+								and a little Sepolia ETH for gas from a Base Sepolia faucet.
+							</p>
+						</div>
+					</li>
+					<li class="step">
+						<span class="step-num">2</span>
+						<div>
+							<strong>Send to Your Wallet Address</strong>
+							<p>Copy your wallet address above and send USDC on {chainName()} to it.</p>
+						</div>
+					</li>
+					<li class="step">
+						<span class="step-num">3</span>
+						<div>
+							<strong>Refresh</strong>
+							<p>Press Refresh above once the transfer is confirmed.</p>
+						</div>
+					</li>
+				</ol>
+
+				<div class="alert alert--warning network-warning">
+					<strong>Important:</strong> Only send USDC on {chainName()} to this address. Sending other
+					tokens or using the wrong network may result in lost funds.
+				</div>
+			</div>
+		{/if}
 
 		<div class="actions">
 			<a href="/" class="btn-secondary">Back to Home</a>
@@ -170,7 +201,8 @@
 		text-align: center;
 	}
 
-	.auth-card p {
+	.auth-card p,
+	.card-intro {
 		color: var(--color-text-dim);
 		margin-bottom: var(--space-lg);
 	}
@@ -193,6 +225,14 @@
 
 	.balance-box .stat-value {
 		margin-bottom: var(--space-md);
+	}
+
+	.balance-actions {
+		display: flex;
+		gap: var(--space-sm);
+		justify-content: center;
+		flex-wrap: wrap;
+		margin-bottom: var(--space-sm);
 	}
 
 	.stat-value--dim {

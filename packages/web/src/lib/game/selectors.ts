@@ -3,15 +3,21 @@
  *
  * Everything here is a function of `GameStateView` so it can be unit-tested
  * without a component and reused by any future board/score renderer.
+ *
+ * Hidden information: the server masks the opponent's own column choices
+ * (their moves at even indices 0, 2, 4) with `HIDDEN_MOVE` until the round
+ * ends. Row assignments (odd indices) are always public. Every selector here
+ * treats `HIDDEN_MOVE` as "unknown", never as a column.
  */
-import { GAME_CONSTANTS, type GameStateView } from '@civil-sarabande/shared';
+import { GAME_CONSTANTS, HIDDEN_MOVE, type GameStateView } from '@civil-sarabande/shared';
 import { getMovePhaseNumber, isBettingPhase, isMovePhase } from './phases';
 
 const BOARD_SIZE = GAME_CONSTANTS.BOARD_SIZE;
 
 export interface Scores {
 	yourScore: number;
-	theirScore: number;
+	/** Null while any opponent column needed for the score is still hidden */
+	theirScore: number | null;
 }
 
 /** A column/row pair the player is composing but has not yet submitted. */
@@ -24,18 +30,59 @@ function isDefined<T>(value: T | undefined): value is T {
 	return value !== undefined;
 }
 
+/** True when a move value is the server's "you may not see this yet" sentinel. */
+export function isHidden(value: number | undefined | null): boolean {
+	return value === HIDDEN_MOVE;
+}
+
+function isKnown(value: number | undefined): value is number {
+	return isDefined(value) && !isHidden(value);
+}
+
 // ---------------------------------------------------------------------------
 // Move-derived selectors
 // ---------------------------------------------------------------------------
 
 /** Columns you have chosen for yourself so far (moves 0, 2, 4). */
 export function getChosenColumns(game: GameStateView): number[] {
-	return [game.yourMoves[0], game.yourMoves[2], game.yourMoves[4]].filter(isDefined);
+	return [game.yourMoves[0], game.yourMoves[2], game.yourMoves[4]].filter(isKnown);
 }
 
-/** Rows the opponent has assigned to you so far (their moves 1, 3, 5). */
+/** Rows the opponent has assigned to you so far (their moves 1, 3, 5). Always public. */
 export function getAssignedRows(game: GameStateView): number[] {
-	return [game.theirMoves[1], game.theirMoves[3], game.theirMoves[5]].filter(isDefined);
+	return [game.theirMoves[1], game.theirMoves[3], game.theirMoves[5]].filter(isKnown);
+}
+
+/**
+ * The opponent's own column choices as far as you are allowed to see them.
+ * Hidden entries are dropped, so the result may be shorter than the number
+ * of moves they have actually made.
+ */
+export function getTheirKnownColumns(game: GameStateView): number[] {
+	return [game.theirMoves[0], game.theirMoves[2], game.theirMoves[4]].filter(isKnown);
+}
+
+/** Rows you assigned to the opponent so far (your moves 1, 3, 5). */
+export function getYourAssignedRows(game: GameStateView): number[] {
+	return [game.yourMoves[1], game.yourMoves[3], game.yourMoves[5]].filter(isKnown);
+}
+
+/**
+ * The column the opponent revealed for scoring, in the viewer's board
+ * orientation (mirrored for the opposite role), or null until both players
+ * have revealed. Prefers the server's `theirRevealedColumn`, falling back to
+ * their seventh move when visible.
+ */
+export function getTheirRevealedColumn(game: GameStateView): number | null {
+	let raw: number | null | undefined = game.theirRevealedColumn;
+	if (raw === null || raw === undefined) {
+		raw = game.theirMoves[6];
+	}
+	if (raw === null || raw === undefined || isHidden(raw)) return null;
+	// Player 2's moves are stored from their flipped perspective, so a player-1
+	// viewer mirrors the opponent's (P2) column; a player-2 viewer sees P1's
+	// column directly. This matches calculateScores.
+	return game.yourRole === 'player1' ? BOARD_SIZE - 1 - raw : raw;
 }
 
 /**
@@ -43,6 +90,9 @@ export function getAssignedRows(game: GameStateView): number[] {
  *
  * Player 2's moves are stored from their flipped perspective, so one side of
  * each intersection must be mirrored before indexing into the board.
+ *
+ * `theirScore` is null when any opponent column that would be scored is
+ * still hidden: partial sums would leak nothing but would mislead.
  */
 export function calculateScores(game: GameStateView): Scores {
 	const isPlayer1 = game.yourRole === 'player1';
@@ -69,15 +119,20 @@ export function calculateScores(game: GameStateView): Scores {
 	}
 
 	// Their score: their columns × rows you assigned to them
-	let theirScore = 0;
-	const theirCols = [game.theirMoves[0], game.theirMoves[2], game.theirMoves[4]].filter(isDefined);
-	const yourAssignedRows = [game.yourMoves[1], game.yourMoves[3], game.yourMoves[5]].filter(
+	const theirColsRaw = [game.theirMoves[0], game.theirMoves[2], game.theirMoves[4]].filter(
 		isDefined
 	);
+	const yourAssignedRows = getYourAssignedRows(game);
 
-	const theirNumScored = Math.min(theirCols.length, yourAssignedRows.length);
+	const theirNumScored = Math.min(theirColsRaw.length, yourAssignedRows.length);
+	let theirScore: number | null = 0;
 	for (let i = 0; i < theirNumScored; i++) {
-		let col = theirCols[i];
+		const rawCol = theirColsRaw[i];
+		if (isHidden(rawCol)) {
+			theirScore = null;
+			break;
+		}
+		let col = rawCol;
 		let row = yourAssignedRows[i];
 
 		if (isPlayer1) {
@@ -142,6 +197,7 @@ export function canStartNextRound(game: GameStateView): boolean {
  * Class names are the contract the stylesheet keys off of: `scored`,
  * `your-column`, `their-row`, `preview-intersection`, `preview-column`,
  * `preview-row`. Future art assets should hook into these, not replace them.
+ * Hidden opponent columns never produce a class.
  */
 export function getCellClasses(
 	game: GameStateView,

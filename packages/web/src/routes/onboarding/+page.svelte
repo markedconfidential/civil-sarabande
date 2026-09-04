@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { isAuthenticated, isLoading, onboardingStatus } from '$lib/auth';
 	import { login } from '$lib/privy';
+	import { checkUsername as checkUsernameApi, getMe, setUsername } from '$lib/api';
 
 	let username = '';
 	let error: string | null = null;
@@ -10,63 +11,24 @@
 	let saving = false;
 	let isAvailable: boolean | null = null;
 
-	// Check if we're authenticated and need username
+	// Once auth has settled, see whether a username already exists.
 	onMount(() => {
-		// Wait for auth to load
 		const unsubscribe = isLoading.subscribe((loading) => {
-			if (!loading) {
-				const auth = $isAuthenticated;
-				if (!auth) {
-					// Not authenticated, will show login prompt
-					return;
-				}
-
-				// Check if user already has a username
+			if (!loading && $isAuthenticated) {
 				checkCurrentUser();
 			}
 		});
-
 		return unsubscribe;
 	});
 
 	async function checkCurrentUser() {
 		try {
-			const { getAccessToken } = await import('$lib/privy');
-			const token = await getAccessToken();
-
-			if (!token) {
-				error = 'Failed to get access token';
-				return;
-			}
-
-			const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-			const response = await fetch(`${API_URL}/users/me`, {
-				headers: {
-					Authorization: `Bearer ${token}`
-				}
-			});
-
-			if (!response.ok) {
-				error = 'Failed to load user data';
-				return;
-			}
-
-			const data = await response.json();
-
-			if (data.user.username) {
-				// Already has username, redirect to home
-				onboardingStatus.set({
-					needsUsername: false,
-					username: data.user.username,
-					isLoading: false
-				});
+			const me = await getMe();
+			if (me.username) {
+				onboardingStatus.set({ needsUsername: false, username: me.username, isLoading: false });
 				goto('/');
 			} else {
-				onboardingStatus.set({
-					needsUsername: true,
-					username: null,
-					isLoading: false
-				});
+				onboardingStatus.set({ needsUsername: true, username: null, isLoading: false });
 			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to check user';
@@ -83,17 +45,8 @@
 		error = null;
 
 		try {
-			const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-			const response = await fetch(`${API_URL}/users/username/${encodeURIComponent(username)}`);
-
-			if (!response.ok) {
-				error = 'Failed to check username';
-				checking = false;
-				return;
-			}
-
-			const data = await response.json();
-			isAvailable = data.available;
+			const result = await checkUsernameApi(username);
+			isAvailable = result.available;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to check username';
 		}
@@ -110,41 +63,8 @@
 		error = null;
 
 		try {
-			const { getAccessToken } = await import('$lib/privy');
-			const token = await getAccessToken();
-
-			if (!token) {
-				error = 'Failed to get access token';
-				saving = false;
-				return;
-			}
-
-			const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-			const response = await fetch(`${API_URL}/users/username`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`
-				},
-				body: JSON.stringify({ username: username.trim() })
-			});
-
-			if (!response.ok) {
-				const data = await response.json();
-				error = data.error || 'Failed to set username';
-				saving = false;
-				return;
-			}
-
-			const data = await response.json();
-
-			onboardingStatus.set({
-				needsUsername: false,
-				username: data.user.username,
-				isLoading: false
-			});
-
-			// Redirect to home
+			const user = await setUsername(username.trim());
+			onboardingStatus.set({ needsUsername: false, username: user.username, isLoading: false });
 			goto('/');
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to set username';
@@ -180,9 +100,7 @@
 		<div class="card auth-card">
 			<h2>Welcome</h2>
 			<p>Sign in to create your account and start playing.</p>
-			<button type="button" on:click={login} class="btn-gold btn-lg btn-block">
-				Sign In with Email or Phone
-			</button>
+			<button type="button" on:click={login} class="btn-gold btn-lg btn-block">Sign In</button>
 		</div>
 	{:else}
 		<div class="card">
