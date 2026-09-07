@@ -419,8 +419,11 @@ describe.skipIf(SKIP)("End-to-end: escrow, play, settlement", () => {
       expect(noDeposit.status).toBe(400);
       expect(noDeposit.body.error).toContain("no player 2 deposit");
       expect((await a.post(`/games/${gameId}/join`)).body.error).toBe("Cannot join your own game");
-      // Non-members are refused.
-      expect((await b.get(`/games/${gameId}`)).status).toBe(403);
+      // An open table is readable by a prospective joiner (they need the
+      // escrow id and stake before depositing), seen as player 2.
+      const openTable = await ok(b.get(`/games/${gameId}`));
+      expect(openTable.game.yourRole).toBe("player2");
+      expect(openTable.game.escrow.contractGameId).toBe(funded.game.escrow.contractGameId);
 
       // Bob deposits and joins.
       await approve(bob, STAKE_UNITS);
