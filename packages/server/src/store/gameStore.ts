@@ -178,7 +178,13 @@ export function findGameByPlayer(playerId: string): GameState | undefined {
 export async function getGameForPlayer(gameId: string, playerId: string): Promise<GameState> {
   const db = getDatabase();
   let game = loadGame(db, gameId);
-  requireMember(game, playerId);
+  // A table that is still waiting for an opponent is open to any signed-in
+  // player: a prospective joiner needs its escrow id and stake before they
+  // can deposit. Nothing in a waiting game is hidden. Once play starts,
+  // only the two players may read it.
+  if (game.phase !== "waiting") {
+    requireMember(game, playerId);
+  }
 
   if (game.phase === "waiting" && chainVerificationEnabled() && config.chainConfigured) {
     try {

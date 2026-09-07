@@ -60,8 +60,17 @@ function escrowView(game: GameState, isPlayer1: boolean): EscrowView {
  * Throws ForbiddenError if the player is not in the game.
  */
 export function toGameStateView(game: GameState, playerId: string): GameStateView {
-  const role = getPlayerRole(game, playerId);
-  if (!role) throw new ForbiddenError();
+  let role = getPlayerRole(game, playerId);
+  if (!role) {
+    // A table still waiting for an opponent is open to any signed-in player,
+    // who sees it as the prospective player 2 (nothing is hidden yet). Once
+    // play starts, only the two players may view it.
+    if (game.phase === "waiting" && game.player2 === null) {
+      role = "player2";
+    } else {
+      throw new ForbiddenError();
+    }
+  }
   const isPlayer1 = role === "player1";
 
   const yourMoves = isPlayer1 ? game.player1Moves : game.player2Moves;

@@ -26,6 +26,17 @@ describe("toGameStateView", () => {
     expect(() => toGameStateView(game, "stranger")).toThrow("Player not in this game");
   });
 
+  test("shows a waiting table to any viewer as the prospective player 2", () => {
+    // A joiner must be able to read the stake and escrow id before depositing.
+    const waiting = createGame(P1, 5, 12345);
+    const view = toGameStateView(waiting, "stranger");
+    expect(view.yourRole).toBe("player2");
+    expect(view.player2).toBeNull();
+    expect(view.escrow.contractGameId).toBe(waiting.contractGameId);
+    expect(view.yourMoves).toEqual([]);
+    expect(view.theirMoves).toEqual([]);
+  });
+
   test("truncates the opponent's moves to the committed length", () => {
     let game = activeGame();
     game = makeMove(game, P2.id, 4, 1);
