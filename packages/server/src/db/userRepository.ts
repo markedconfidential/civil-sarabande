@@ -103,6 +103,25 @@ export function getUserByUsername(
 }
 
 /**
+ * Get a user by wallet address (case-insensitive).
+ */
+export function getUserByWalletAddress(
+  db: Database,
+  walletAddress: string
+): User | undefined {
+  const stmt = db.prepare(
+    "SELECT * FROM users WHERE lower(wallet_address) = lower(?) ORDER BY updated_at DESC LIMIT 1"
+  );
+  const row = stmt.get(walletAddress) as Record<string, unknown> | undefined;
+
+  if (!row) {
+    return undefined;
+  }
+
+  return rowToUser(row);
+}
+
+/**
  * Check if a username is available.
  *
  * @param db - Database connection

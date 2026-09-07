@@ -69,6 +69,8 @@ Before commissioning anything, produce one reference sheet: sprite scale (e.g. 2
 
 **Status: done.** The written spec is `docs/art-bible.md`; the living specimen page is `/design` in the web app.
 
+**Integration status.** A generated first pass of Tier 0 (numerals, sigils, coins, board surface and grid, washes), Tier 1 (damage numbers, result crest, game-over tableau, seals), Tier 2 (JRPG windows, fonts) and Tier 3 (breathing wash, synthesised audio, mute toggle) is wired into the live game. Section 9 of the art bible lists each piece and where it lives. Still open: commissioned raster art to replace the generated assets, the reveal "spell cast" sequence (8), watercolor selection-stroke animations (4), the cursor sprite and icon set (7, 18), the pixel UI font (14), music (21), haptics (22) and brand (23–24).
+
 ## Engineering work that needs no new art (run in parallel)
 
 - **Unify onboarding/funding pages with the theme.** `routes/onboarding/+page.svelte` and `routes/funding/+page.svelte` use off-palette colors (`#7c3aed`, `#666`); migrate to `app.css` variables.

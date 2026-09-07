@@ -22,7 +22,9 @@ export const SPRITE_PALETTE: Record<string, string> = {
 	g: '#9a7d1c', // Gold 1
 	G: '#c9a227', // Gold 2
 	y: '#e6bb3a', // Gold 3
-	Y: '#f5dc7a' // Gold 4
+	Y: '#f5dc7a', // Gold 4
+	V: '#4a8b5c', // Verdant
+	X: '#a84545' // Blood
 };
 
 /** Suited numeral specimen: the value 17, 24 × 24. */

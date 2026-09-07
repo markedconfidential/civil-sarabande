@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
+	import { play } from '$lib/audio';
 
 	/** The columns the player chose this round; one of them will score. */
 	export let columns: number[];
@@ -7,6 +8,11 @@
 	export let loading = false;
 
 	const dispatch = createEventDispatcher<{ submit: void }>();
+
+	function submit() {
+		play('reveal');
+		dispatch('submit');
+	}
 </script>
 
 <h2>Reveal Your Column</h2>
@@ -14,11 +20,11 @@
 	Choose which of your three columns to score. This column intersected with the rows assigned to
 	you will determine your final score.
 </p>
-<form on:submit|preventDefault={() => dispatch('submit')} class="reveal-form">
+<form on:submit|preventDefault={submit} class="reveal-form">
 	<div class="reveal-columns">
 		{#each columns as col}
 			<label class="column-choice" class:selected={revealColumn === col}>
-				<input type="radio" name="revealColumn" value={col} bind:group={revealColumn} />
+				<input type="radio" name="revealColumn" value={col} bind:group={revealColumn} on:change={() => play('tick')} />
 				<span class="column-num">Column {col}</span>
 			</label>
 		{/each}

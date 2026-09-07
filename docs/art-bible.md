@@ -150,3 +150,27 @@ An asset is accepted only when every line is true.
 - The layering model.
 
 When real assets land, they replace the stand-ins on that page first, so the page is always the current truth.
+
+---
+
+## 9. Status — generated first pass (integrated)
+
+Every asset class below is now generated in code and rendered by the live game, not only by `/design`. These are procedural first-pass assets built to the sizes above; commissioned art replaces them file-for-file.
+
+| Asset | Where it lives | Notes |
+|---|---|---|
+| Suited numerals 1–36 | `packages/web/src/lib/art/numerals.ts`, `components/art/Numeral.svelte` | 24 × 24, deterministic: 5 × 7 digit font doubled to 10 × 14 (rows 1–14), a 7 × 7 suit motif bottom-left per band (Moon 1–6, Star 7–12, Chalice 13–18, Blade 19–24, Wand 25–30, Crown 31–36), 1–6 rank pips bottom-right. Two-tone bitmap ('#' primary, 'K' secondary) mapped per surface: ink on parchment, parchment on ink, muted. `aria-label` is the value. |
+| Player sigils | `lib/art/sigil.ts`, `components/art/PlayerSigil.svelte` | 32 × 32 from FNV-1a(seed) → mulberry32 stream; ground and figure families (burgundy / gold / parchment / verdant) from the hash; a 16 × 32 half mirrored; cellular-automaton figure with an Ink 2 outline over a banded field (diamond / square / round); 1px Ink 1 border and Ink 2 hairline. Seed is the wallet address, else the player id. |
+| Coins | `components/art/Coin.svelte`, `CoinStack.svelte` | The 12 × 12 COIN bitmap. A stack shows one sprite per ten coins (columns of five, or ten when `dense`), then loose coins; at most twelve sprites, plus the number. |
+| Board surface | `lib/art/surfaces.ts`, `Board.svelte`, `app.css` | Parchment tile (warm gradient + feTurbulence grain) as an SVG data URI; aged-edge vignette; hand-drawn ink grid (seeded wandering cubic paths, non-scaling stroke) as an overlay; washes are layered radial gradients with a darker wet rim. Burgundy carries a vertical stroke, gold a horizontal one. The opponent's revealed column gets a gold ink frame (`revealed-column`). |
+| JRPG windows | `app.css` (`.card`, `.action-panel`, `.jrpg-window`), `components/art/JRPGWindow.svelte` | CSS 9-slice stand-in: 2px Ink border, gold edge ring, inner Parchment 3 hairline, four corner studs, hard drop shadow. Parchment is the default and remaps the text tokens to ink inside; `--ink` and `--blood` variants. Buttons are pixel-edged with a 3px hard shadow. |
+| Watercolor backgrounds | `lib/art/generate-backgrounds.ts` → `static/art/backgrounds/{lobby,duel,settlement}.svg` | Generated SVG (2048 × 1536, slice fit): dark ground, warm centre, turbulence-displaced blots with a wet-edge ring, tremor ink strokes, grain. Applied by the root layout per route; `body[data-scene='settlement']` switches to the vault on game over. Breathing loop, off under reduced motion. Regenerate with `bun run src/lib/art/generate-backgrounds.ts`. |
+| Seals | `components/game/Seal.svelte` | SVG wax seal: pending (dashed ring, hourglass tick), stamping (press loop), sealed (wax + gold sigil), released (gold crack, glow), failed (blood wax, black crack). |
+| Countdown | `components/game/Countdown.svelte` | Ink ring that empties plus mm:ss; gold when it is your turn; red pulse under 15 s. |
+| FX | `components/art/DamageNumber.svelte`, `ResultCrest.svelte` | Damage numbers: the 5 × 7 font doubled and outlined (24 × 32 per digit at 2×), rise and fade; still frame under reduced motion. Crest: SVG shield with laurels, charged with a column stroke (you), row stroke (them) or both (tie). |
+| Audio | `lib/audio.ts`, `components/art/MuteToggle.svelte` | WebAudio-synthesised tick / commit / coin / reveal / win / lose / seal. Context is created only on the first pointer or key gesture; `muted` persists in localStorage. |
+| Fonts, favicon | `src/app.html`, `static/favicon.svg` | Cinzel 600/700, Crimson Text 400/400i/600, JetBrains Mono 400/500 from Google Fonts with preconnect. Gold sigil favicon on ink. |
+
+**Mobile numerals.** Cells are 52px from 768px down and `min(52px, (100vw − 72px) / 6)` under 480px, which keeps the 48px numeral at an exact 2× down to a 390px viewport. Narrower than that, the cell shrinks and the numeral follows by CSS width (`min(48px, cell − 4px)`), a non-integer scale accepted over overflow. Sigils drop from 64px to 32px (exact 1×) in the players bar on phones.
+
+**Delivery-spec deviations.** Sprites are SVG rects generated from text bitmaps rather than indexed PNGs, and backgrounds are SVG rather than WebP; no files under `static/art/sprites`, `numerals`, `windows` or `fx` yet. The asset ledger is still to be created with the first commissioned file.

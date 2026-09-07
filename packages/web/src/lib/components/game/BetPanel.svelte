@@ -2,12 +2,23 @@
 	import { createEventDispatcher } from 'svelte';
 	import type { GameStateView } from '@civil-sarabande/shared';
 	import { canFold, getAmountToCall } from '$lib/game/selectors';
+	import { play } from '$lib/audio';
 
 	export let game: GameStateView;
 	export let betAmount = 0;
 	export let loading = false;
 
 	const dispatch = createEventDispatcher<{ bet: void; fold: void }>();
+
+	function bet() {
+		play(betAmount > 0 ? 'coin' : 'commit');
+		dispatch('bet');
+	}
+
+	function fold() {
+		play('lose');
+		dispatch('fold');
+	}
 
 	$: amountToCall = getAmountToCall(game);
 	$: foldAllowed = canFold(game);
@@ -33,7 +44,7 @@
 	{/if}
 </div>
 
-<form on:submit|preventDefault={() => dispatch('bet')} class="bet-form">
+<form on:submit|preventDefault={bet} class="bet-form">
 	<div class="form-group">
 		<label for="betAmount">Bet Amount</label>
 		<input
@@ -50,7 +61,7 @@
 			{submitLabel}
 		</button>
 		{#if foldAllowed}
-			<button type="button" class="btn-danger" on:click={() => dispatch('fold')} disabled={loading}>
+			<button type="button" class="btn-danger" on:click={fold} disabled={loading}>
 				Fold
 			</button>
 		{/if}

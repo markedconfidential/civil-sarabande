@@ -27,17 +27,19 @@ const { BOARD_SIZE, MOVES_PER_ROUND } = GAME_CONSTANTS;
  * @param board - The 6x6 magic square
  * @param p1Moves - Player 1's moves [selfCol, otherRow, ...] (6 elements)
  * @param p2Moves - Player 2's moves [selfCol, otherRow, ...] (6 elements)
+ * @param pairs - Number of move pairs to score (default: all 3)
  * @returns Scores for both players
  */
 export function computeScores(
   board: MagicSquare,
   p1Moves: MoveList,
-  p2Moves: MoveList
+  p2Moves: MoveList,
+  pairs: number = MOVES_PER_ROUND
 ): { p1Score: number; p2Score: number } {
   let p1Score = 0;
   let p2Score = 0;
 
-  for (let i = 0; i < MOVES_PER_ROUND; i++) {
+  for (let i = 0; i < pairs; i++) {
     const p1SelfChoice = p1Moves[i * 2]; // Column P1 chose for themselves
     const p1OtherChoice = p1Moves[i * 2 + 1]; // Row P1 assigned to P2
 
@@ -76,14 +78,17 @@ export function determineWinner(
 }
 
 /**
- * Get the cells that would be scored for a player given the current moves.
- * Useful for UI highlighting and score previews.
+ * Get the cells that would be scored for a player given the current moves,
+ * using the same mapping as computeScores. Useful for UI highlighting.
+ *
+ * Player 2's own choices are in their mirrored coordinates, so a player 2
+ * value v addresses board index 5 - v. Player 1's values are used as-is.
  *
  * @param board - The 6x6 magic square
- * @param playerMoves - The player's moves (columns they chose)
- * @param opponentMoves - The opponent's moves (rows they assigned)
- * @param isPlayer2 - Whether this is for player 2 (requires mirroring)
- * @returns Array of {row, col, value} for each scored cell
+ * @param playerMoves - The player's moves (columns they chose at even indices)
+ * @param opponentMoves - The opponent's moves (rows they assigned at odd indices)
+ * @param isPlayer2 - Whether `playerMoves` belong to player 2
+ * @returns Array of {row, col, value} for each scored cell, in board coordinates
  */
 export function getScoredCells(
   board: MagicSquare,
@@ -99,16 +104,12 @@ export function getScoredCells(
   );
 
   for (let i = 0; i < numMoves; i++) {
-    let selfChoice = playerMoves[i * 2];
-    let otherChoice = opponentMoves[i * 2 + 1];
+    const selfChoice = playerMoves[i * 2];
+    const otherChoice = opponentMoves[i * 2 + 1];
 
-    if (isPlayer2) {
-      selfChoice = BOARD_SIZE - 1 - selfChoice;
-      otherChoice = BOARD_SIZE - 1 - otherChoice;
-    }
-
-    const row = otherChoice;
-    const col = selfChoice;
+    // Player 1's cell: board[5 - p2Row][p1Col]. Player 2's cell: board[5 - p2Col][p1Row].
+    const row = isPlayer2 ? BOARD_SIZE - 1 - selfChoice : BOARD_SIZE - 1 - otherChoice;
+    const col = isPlayer2 ? otherChoice : selfChoice;
     const value = board[row * BOARD_SIZE + col];
 
     cells.push({ row, col, value });
@@ -116,4 +117,3 @@ export function getScoredCells(
 
   return cells;
 }
-

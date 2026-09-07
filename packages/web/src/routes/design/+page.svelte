@@ -2,7 +2,29 @@
 	import { onMount } from 'svelte';
 	import { panelIn, popIn, quickFade } from '$lib/motion';
 	import PixelSprite from '$lib/components/design/PixelSprite.svelte';
-	import { COIN, CURSOR, NUMERAL_17 } from '$lib/design/specimens';
+	import { COIN, CURSOR } from '$lib/design/specimens';
+	import { numeralBitmap, numeralSheet, SUITS } from '$lib/art/numerals';
+	import { sigilSpec } from '$lib/art/sigil';
+	import { PARCHMENT_URL } from '$lib/art/surfaces';
+	import Numeral from '$lib/components/art/Numeral.svelte';
+	import PlayerSigil from '$lib/components/art/PlayerSigil.svelte';
+	import CoinStack from '$lib/components/art/CoinStack.svelte';
+	import DamageNumber from '$lib/components/art/DamageNumber.svelte';
+	import ResultCrest from '$lib/components/art/ResultCrest.svelte';
+	import JRPGWindow from '$lib/components/art/JRPGWindow.svelte';
+	import Seal from '$lib/components/game/Seal.svelte';
+	import Countdown from '$lib/components/game/Countdown.svelte';
+
+	const NUMERAL_17 = numeralBitmap(17);
+	const sheet = numeralSheet();
+	const sigilSeeds = ['did:privy:cm1a2b3c4d', '0x8A3bC2f1D4e5F6a7B8c9D0e1F2a3B4c5D6e7F8a9', 'preview'];
+	const sealStates = ['pending', 'stamping', 'sealed', 'released', 'failed'] as const;
+	let countdownDeadline = 0;
+	let fxKey = 0;
+	function replayFx() {
+		fxKey += 1;
+		countdownDeadline = Date.now() + 95_000;
+	}
 
 	// ------------------------------------------------------------------
 	// Palette: sprite palette is fixed; UI tokens are read live from CSS
@@ -49,6 +71,7 @@
 	onMount(() => {
 		const style = getComputedStyle(document.documentElement);
 		tokens = tokenNames.map((name) => ({ name, value: style.getPropertyValue(name).trim() }));
+		countdownDeadline = Date.now() + 95_000;
 	});
 
 	// Motion replay
@@ -69,9 +92,9 @@
 	</header>
 
 	<div class="alert alert--info">
-		Every specimen on this page is a procedural stand-in drawn to spec so engineering can build
-		against the correct sizes today. Real assets replace them here first. The written spec is
-		<code>docs/art-bible.md</code>.
+		Every asset here is the one the live game renders, generated to spec: numerals, sigils,
+		coins, windows, seals and washes come from <code>$lib/art</code> and
+		<code>$lib/components</code>. The written spec is <code>docs/art-bible.md</code>.
 	</div>
 
 	<!-- ============================================================ -->
@@ -103,7 +126,7 @@
 				<tr><td>UI icons</td><td>16 × 16</td><td>32 × 32</td></tr>
 				<tr><td>Damage digits</td><td>8 × 12</td><td>16 × 24</td></tr>
 				<tr><td>Window 9-slice</td><td>8px corner, 4px edge</td><td>16px / 8px</td></tr>
-				<tr><td>Watercolor backgrounds</td><td>2048 × 1536 painted</td><td>free scale</td></tr>
+				<tr><td>Watercolor backgrounds</td><td>2048 × 1536 SVG</td><td>free scale</td></tr>
 			</tbody>
 		</table>
 	</section>
@@ -146,10 +169,10 @@
 		<div class="specimens">
 			<div class="specimen">
 				<div class="specimen-stage specimen-stage--dark">
-					<PixelSprite bitmap={NUMERAL_17} scale={2} label="Numeral 17" />
+					<Numeral value={17} tone="paper" />
 				</div>
-				<div class="specimen-stage specimen-stage--paper">
-					<PixelSprite bitmap={NUMERAL_17} scale={2} label="Numeral 17 on parchment" />
+				<div class="specimen-stage specimen-stage--paper" style="background-image:{PARCHMENT_URL}">
+					<Numeral value={17} />
 				</div>
 				<span class="caption">Suited numeral (24 × 24)</span>
 			</div>
@@ -176,35 +199,63 @@
 
 			<div class="specimen">
 				<div class="specimen-stage specimen-stage--dark">
-					<svg class="sigil" viewBox="0 0 32 32" width="64" height="64" role="img" aria-label="Sample sigil">
-						<rect x="0.5" y="0.5" width="31" height="31" fill="#6d2f38" stroke="#0d0a0e" />
-						<rect x="2.5" y="2.5" width="27" height="27" fill="none" stroke="#c9a227" />
-						<circle cx="16" cy="16" r="9" fill="none" stroke="#f5dc7a" stroke-width="1.5" />
-						<path d="M16 7 L24 21 L8 21 Z" fill="none" stroke="#e6bb3a" stroke-width="1.5" />
-						<circle cx="16" cy="16" r="2" fill="#f1e6cf" />
-						<circle cx="16" cy="5" r="1" fill="#f5dc7a" />
-						<circle cx="27" cy="16" r="1" fill="#f5dc7a" />
-						<circle cx="5" cy="16" r="1" fill="#f5dc7a" />
-						<circle cx="16" cy="27" r="1" fill="#f5dc7a" />
-					</svg>
+					<PlayerSigil seed={sigilSeeds[0]} size={64} />
 				</div>
 				<div class="specimen-stage specimen-stage--paper">
-					<svg class="sigil" viewBox="0 0 32 32" width="64" height="64" role="img" aria-label="Sample sigil on parchment">
-						<rect x="0.5" y="0.5" width="31" height="31" fill="#6d2f38" stroke="#0d0a0e" />
-						<rect x="2.5" y="2.5" width="27" height="27" fill="none" stroke="#c9a227" />
-						<circle cx="16" cy="16" r="9" fill="none" stroke="#f5dc7a" stroke-width="1.5" />
-						<path d="M16 7 L24 21 L8 21 Z" fill="none" stroke="#e6bb3a" stroke-width="1.5" />
-						<circle cx="16" cy="16" r="2" fill="#f1e6cf" />
-					</svg>
+					<PlayerSigil seed={sigilSeeds[0]} size={64} label="Sigil on parchment" />
 				</div>
 				<span class="caption">Sigil (32 × 32)</span>
 			</div>
 		</div>
 
+		<h3>Numeral sheet, 1–36</h3>
+		<p class="lede">
+			Six suits by six ranks: Moon, Star, Chalice, Blade, Wand, Crown. Digits from a 5 × 7
+			font doubled to 10 × 14, the suit motif bottom-left, rank pips bottom-right. Ink on
+			parchment as on the board.
+		</p>
+		<div class="numeral-sheet" style="background-image:{PARCHMENT_URL}">
+			{#each sheet as n}
+				<div class="numeral-cell" title="{n.value} · {SUITS[Math.floor((n.value - 1) / 6)]}">
+					<Numeral value={n.value} />
+				</div>
+			{/each}
+		</div>
+		<div class="suit-legend">
+			{#each SUITS as suit, i}
+				<span class="caption">{i * 6 + 1}–{i * 6 + 6} {suit}</span>
+			{/each}
+		</div>
+
+		<h3>Sigils</h3>
+		<p class="lede">
+			Generated from the player id or wallet: FNV-1a hash, mirrored 16 × 32 half, a ground
+			and figure family from burgundy, gold, parchment and verdant, always a 1px Ink border.
+		</p>
+		<div class="sigil-row">
+			{#each sigilSeeds as seed}
+				<div class="sigil-sample">
+					<PlayerSigil {seed} size={64} />
+					<PlayerSigil {seed} size={32} />
+					<span class="caption">{sigilSpec(seed).ground} / {sigilSpec(seed).figure} · {sigilSpec(seed).shape}</span>
+					<span class="caption seed">{seed.length > 18 ? seed.slice(0, 18) + '…' : seed}</span>
+				</div>
+			{/each}
+		</div>
+
+		<h3>Coin stacks</h3>
+		<p class="lede">One sprite per ten coins in columns of five, loose coins after; at most twelve sprites.</p>
+		<div class="coin-row">
+			{#each [0, 3, 10, 27, 64, 100] as n}
+				<div class="coin-sample"><CoinStack count={n} /></div>
+			{/each}
+		</div>
+
 		<h3>Watercolor wash</h3>
 		<p class="lede">
 			The one non-pixel layer. Painted, wet-edged, 20 to 40 percent of a palette hue over
-			parchment. This stand-in is generated with an SVG turbulence filter.
+			parchment. The page backgrounds are generated the same way by
+			<code>src/lib/art/generate-backgrounds.ts</code>.
 		</p>
 		<div class="wash-row">
 			<svg class="wash" viewBox="0 0 320 120" role="img" aria-label="Watercolor wash specimen">
@@ -229,29 +280,82 @@
 				<path d="M24 100 C 90 92, 150 108, 296 96" fill="none" stroke="#0d0a0e" stroke-opacity="0.8" stroke-width="1.6" stroke-linecap="round" />
 			</svg>
 		</div>
+		<div class="bg-row">
+			{#each ['lobby', 'duel', 'settlement'] as name}
+				<div class="bg-sample">
+					<img src="/art/backgrounds/{name}.svg" alt="{name} background" />
+					<span class="caption">{name}</span>
+				</div>
+			{/each}
+		</div>
 	</section>
 
 	<!-- ============================================================ -->
 	<section class="card">
 		<h2>4. Windows</h2>
 		<p class="lede">
-			Action panels become framed JRPG windows: a pixel-crisp double border with corner studs
-			over a subtly painted interior. Three variants. These are CSS stand-ins for the 9-slice.
+			Action panels are framed JRPG windows: a pixel double border with corner studs over a
+			painted interior. <code>.card</code> and <code>.action-panel</code> are parchment by
+			default; <code>.card--ink</code> and <code>.card--blood</code> switch variants, and
+			<code>JRPGWindow</code> wraps any content.
 		</p>
 		<div class="windows">
-			<div class="jrpg-window jrpg-window--parchment">
-				<div class="jrpg-title">Parchment</div>
+			<JRPGWindow variant="parchment" title="Parchment">
 				<p>Primary panels: moves, bets, results.</p>
-			</div>
-			<div class="jrpg-window jrpg-window--ink">
-				<div class="jrpg-title">Ink</div>
-				<p>Menus, modals, on-chain seals.</p>
-			</div>
-			<div class="jrpg-window jrpg-window--blood">
-				<div class="jrpg-title">Blood</div>
+				<div class="window-buttons"><button class="btn-primary btn-sm">Confirm</button><button class="btn-gold btn-sm">Reveal</button></div>
+			</JRPGWindow>
+			<JRPGWindow variant="ink" title="Ink">
+				<p>Status chrome: players, pot, phase, seals.</p>
+				<div class="window-buttons"><button class="btn-secondary btn-sm">Leave</button></div>
+			</JRPGWindow>
+			<JRPGWindow variant="blood" title="Blood">
 				<p>Danger: fold, leave, forfeit.</p>
-			</div>
+				<div class="window-buttons"><button class="btn-danger btn-sm">Fold</button></div>
+			</JRPGWindow>
 		</div>
+
+		<h3>Seals</h3>
+		<p class="lede">On-chain status as a wax seal. Five states; the transaction link sits beside the detail.</p>
+		<div class="seal-grid">
+			{#each sealStates as st}
+				<div class="seal-sample">
+					<Seal
+						state={st}
+						label={st === 'pending' ? 'Awaiting settlement' : st === 'stamping' ? 'Settling on chain' : st === 'sealed' ? 'Stake locked' : st === 'released' ? 'Settled' : 'Settlement failed'}
+						detail={st === 'released' ? 'You receive 1.5 USDC · They receive 0.5 USDC' : st === 'failed' ? 'execution reverted' : st === 'stamping' ? 'Waiting for confirmation' : ''}
+						href={st === 'released' ? 'https://sepolia.basescan.org/tx/0x0' : null}
+					/>
+					<span class="caption">{st}</span>
+				</div>
+			{/each}
+		</div>
+
+		<h3>FX</h3>
+		<p class="lede">Countdown ring, floating damage numbers, and the round-result crest.</p>
+		<button class="btn-secondary btn-sm" on:click={replayFx}>Replay</button>
+		{#key fxKey}
+			<div class="fx-row">
+				<div class="fx-sample">
+					<Countdown deadline={countdownDeadline} yourTurn={true} />
+					<Countdown deadline={Date.now() + 12_000} yourTurn={false} />
+					<span class="caption">Countdown · yours / urgent</span>
+				</div>
+				<div class="fx-sample fx-sample--dark">
+					<div class="fx-numbers">
+						<DamageNumber value={17} tone="you" />
+						<DamageNumber value={-4} tone="them" delay={200} />
+						<DamageNumber value={36} tone="neutral" signed={false} delay={400} />
+					</div>
+					<span class="caption">Damage numbers · you / them / neutral</span>
+				</div>
+				<div class="fx-sample fx-sample--dark">
+					<ResultCrest roundNumber={3} outcome="you" potWon={12} />
+					<ResultCrest roundNumber={4} outcome="them" potWon={8} byFold={true} delay={150} />
+					<ResultCrest roundNumber={5} outcome="tie" delay={300} />
+					<span class="caption">Result crest</span>
+				</div>
+			</div>
+		{/key}
 	</section>
 
 	<!-- ============================================================ -->
@@ -297,20 +401,20 @@
 		<h2>7. Typography</h2>
 		<div class="type-samples">
 			<div class="type-sample">
-				<span class="caption">Display · Cinzel</span>
+				<span class="caption">Display · Cinzel 600/700 (Google Fonts, loaded in app.html)</span>
 				<div class="type-display">Civil Sarabande</div>
 			</div>
 			<div class="type-sample">
-				<span class="caption">Body · Crimson Text</span>
+				<span class="caption">Body · Crimson Text 400/400i/600 (Google Fonts)</span>
 				<div class="type-body">Choose a column for yourself and assign a row to your opponent.</div>
 			</div>
 			<div class="type-sample">
-				<span class="caption">Mono · JetBrains Mono</span>
+				<span class="caption">Mono · JetBrains Mono 400/500 (Google Fonts)</span>
 				<div class="type-mono">0x8A3bC2f1D4e5F6a7B8c9D0e1F2a3B4c5D6e7F8a9</div>
 			</div>
 			<div class="type-sample">
-				<span class="caption">Pixel UI font · to commission</span>
-				<div class="type-pixel">0123456789 CALL RAISE FOLD</div>
+				<span class="caption">Pixel digits · the 5 × 7 numeral font, outlined, as used for damage numbers</span>
+				<div class="type-pixel"><DamageNumber value="0123456789" tone="neutral" signed={false} /></div>
 			</div>
 		</div>
 	</section>
@@ -454,10 +558,6 @@
 		margin-bottom: var(--space-xs);
 	}
 
-	.sigil {
-		shape-rendering: crispEdges;
-	}
-
 	.wash-row {
 		border: 1px solid var(--color-cell-border);
 	}
@@ -475,72 +575,139 @@
 		gap: var(--space-lg);
 	}
 
-	.jrpg-window {
-		position: relative;
-		padding: var(--space-md);
-		border: 2px solid #0d0a0e;
-		box-shadow:
-			0 0 0 2px var(--win-edge),
-			0 0 0 4px #0d0a0e,
-			inset 0 0 0 2px var(--win-inner);
-		background: var(--win-fill);
-		color: var(--win-text);
-		image-rendering: pixelated;
+	.windows :global(.jrpg-window) {
+		margin: 4px;
 	}
 
-	.jrpg-window::before,
-	.jrpg-window::after {
-		content: '';
-		position: absolute;
-		width: 6px;
-		height: 6px;
-		background: var(--win-edge);
-		box-shadow: 0 0 0 2px #0d0a0e;
-	}
-
-	.jrpg-window::before {
-		top: -4px;
-		left: -4px;
-	}
-
-	.jrpg-window::after {
-		bottom: -4px;
-		right: -4px;
-	}
-
-	.jrpg-window p {
-		margin: 0;
+	.windows :global(.jrpg-window p) {
+		margin: 0 0 var(--space-sm) 0;
 		font-size: 0.9rem;
 	}
 
-	.jrpg-title {
-		font-family: var(--font-display);
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		font-size: 0.8rem;
-		margin-bottom: var(--space-xs);
+	.window-buttons {
+		display: flex;
+		gap: var(--space-sm);
 	}
 
-	.jrpg-window--parchment {
-		--win-fill: linear-gradient(160deg, #f1e6cf, #d9c8a5);
-		--win-edge: #c9a227;
-		--win-inner: #b8a27c;
-		--win-text: #2a2230;
+	.numeral-sheet {
+		display: grid;
+		grid-template-columns: repeat(6, 56px);
+		gap: 4px;
+		justify-content: center;
+		padding: var(--space-md);
+		background-color: #d9c8a5;
+		border: 2px solid #0d0a0e;
+		box-shadow: 0 0 0 2px #9a7d1c, 0 0 0 4px #0d0a0e;
+		margin: var(--space-md) auto;
+		width: max-content;
+		max-width: 100%;
+		overflow-x: auto;
 	}
 
-	.jrpg-window--ink {
-		--win-fill: linear-gradient(160deg, #2a2230, #0d0a0e);
-		--win-edge: #e6bb3a;
-		--win-inner: #4a3f52;
-		--win-text: #f1e6cf;
+	.numeral-cell {
+		width: 56px;
+		height: 56px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		outline: 1px solid rgba(13, 10, 14, 0.35);
 	}
 
-	.jrpg-window--blood {
-		--win-fill: linear-gradient(160deg, #8b4049, #6d2f38);
-		--win-edge: #f5dc7a;
-		--win-inner: #a84545;
-		--win-text: #f1e6cf;
+	.suit-legend {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--space-sm) var(--space-md);
+	}
+
+	.sigil-row,
+	.coin-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-xl);
+		align-items: flex-end;
+	}
+
+	.sigil-sample {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-sm);
+	}
+
+	.seed {
+		font-size: 0.65rem;
+	}
+
+	.coin-sample {
+		padding: var(--space-sm);
+		background: #1a1520;
+		border: 2px solid #0d0a0e;
+	}
+
+	.bg-row {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: var(--space-md);
+		margin-top: var(--space-md);
+	}
+
+	.bg-sample img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 4 / 3;
+		object-fit: cover;
+		border: 2px solid #0d0a0e;
+	}
+
+	.seal-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: var(--space-md);
+	}
+
+	.seal-sample {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+
+	.seal-sample :global(.seal) {
+		background: #1a1520;
+		border: 2px solid #0d0a0e;
+		color: #e8e4eb;
+		box-shadow: 0 0 0 1px #4a3f52;
+	}
+
+	.seal-sample :global(.seal .seal-detail) {
+		color: #9a9498;
+	}
+
+	.fx-row {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: var(--space-lg);
+		margin-top: var(--space-md);
+	}
+
+	.fx-sample {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		align-items: flex-start;
+	}
+
+	.fx-sample--dark {
+		background: #1a1520;
+		padding: var(--space-md);
+		border: 2px solid #0d0a0e;
+	}
+
+	.fx-numbers {
+		display: flex;
+		gap: var(--space-lg);
+		height: 60px;
+		align-items: flex-end;
 	}
 
 	/* Motion */
@@ -627,11 +794,10 @@
 	}
 
 	.type-pixel {
-		font-family: var(--font-mono);
-		font-size: 1rem;
-		letter-spacing: 0.15em;
-		color: var(--color-text-dim);
-		font-style: italic;
+		display: inline-block;
+		padding: var(--space-sm);
+		background: #1a1520;
+		border: 2px solid #0d0a0e;
 	}
 
 	@media (max-width: 600px) {
