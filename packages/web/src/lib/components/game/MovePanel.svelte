@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import { GAME_CONSTANTS } from '@civil-sarabande/shared';
+	import { play } from '$lib/audio';
 
 	export let selfColumn = 0;
 	export let otherRow = 0;
@@ -8,15 +9,20 @@
 
 	const BOARD_SIZE = GAME_CONSTANTS.BOARD_SIZE;
 	const dispatch = createEventDispatcher<{ submit: void }>();
+
+	function submit() {
+		play('commit');
+		dispatch('submit');
+	}
 </script>
 
 <h2>Make Your Move</h2>
 <p class="action-description">Choose a column for yourself and assign a row to your opponent.</p>
-<form on:submit|preventDefault={() => dispatch('submit')} class="move-form">
+<form on:submit|preventDefault={submit} class="move-form">
 	<div class="move-selectors">
 		<div class="form-group">
 			<label for="selfColumn">Your Column</label>
-			<select id="selfColumn" bind:value={selfColumn}>
+			<select id="selfColumn" bind:value={selfColumn} on:change={() => play('tick')}>
 				{#each Array(BOARD_SIZE) as _, i}
 					<option value={i}>Column {i}</option>
 				{/each}
@@ -24,7 +30,7 @@
 		</div>
 		<div class="form-group">
 			<label for="otherRow">Opponent's Row</label>
-			<select id="otherRow" bind:value={otherRow}>
+			<select id="otherRow" bind:value={otherRow} on:change={() => play('tick')}>
 				{#each Array(BOARD_SIZE) as _, i}
 					<option value={i}>Row {i}</option>
 				{/each}

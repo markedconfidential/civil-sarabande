@@ -1,7 +1,9 @@
 /**
  * Game State Management
  *
- * State machine for managing game flow and transitions.
+ * Pure state machine for a game. Every function takes a GameState and
+ * returns a new one (or throws a GameError). Persistence, chain access and
+ * notifications live in the store.
  *
  * Reference: reference/server/protocol.txt for the game flow
  */
@@ -10,14 +12,20 @@ import {
   type GameState,
   type GamePhase,
   type Player,
+  type RoundResult,
   GAME_CONSTANTS,
   getAnte,
   getLeavePenalty,
 } from "@civil-sarabande/shared";
 import { generateMagicSquare } from "./magicSquare";
-import { determineWinner } from "./scoring";
+import { computeScores } from "./scoring";
+import { contractGameIdFor } from "../blockchain/gameId";
+import { GameError, ForbiddenError } from "./errors";
+import { nextDeadline } from "./clock";
 
-const { STARTING_COINS } = GAME_CONSTANTS;
+const { STARTING_COINS, BOARD_SIZE, MOVES_PER_ROUND } = GAME_CONSTANTS;
+
+export type PlayerRole = "player1" | "player2";
 
 /**
  * Generate a unique game ID.
@@ -26,24 +34,33 @@ function generateGameId(): string {
   return `game_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
+/** Which side of the table a player id sits on, or null if not in the game. */
+export function getPlayerRole(state: GameState, playerId: string): PlayerRole | null {
+  if (state.player1.id === playerId) return "player1";
+  if (state.player2?.id === playerId) return "player2";
+  return null;
+}
+
+function requireRole(state: GameState, playerId: string): PlayerRole {
+  const role = getPlayerRole(state, playerId);
+  if (!role) throw new ForbiddenError();
+  return role;
+}
+
 /**
  * Create a new game in the waiting state.
  *
  * @param player1 - The player creating the game
- * @param stake - The stake amount for the game
+ * @param stake - Stake per player in USDC
  * @param seed - Optional seed for deterministic board generation
- * @returns A new game state
  */
-export function createGame(
-  player1: Player,
-  stake: number,
-  seed?: number
-): GameState {
+export function createGame(player1: Player, stake: number, seed?: number): GameState {
   const actualSeed = seed ?? Date.now();
   const board = generateMagicSquare(actualSeed);
+  const gameId = generateGameId();
 
   return {
-    gameId: generateGameId(),
+    gameId,
     board,
     phase: "waiting",
     player1,
@@ -62,29 +79,123 @@ export function createGame(
     roundNumber: 1,
     stake,
     createdAt: Date.now(),
+
+    escrowStatus: "unfunded",
+    contractGameId: contractGameIdFor(gameId),
+    payoutTxHash: null,
+    player1Payout: null,
+    player2Payout: null,
+    settlementError: null,
+
+    phaseDeadline: null,
+    roundResult: null,
   };
 }
+
+// ============================================================================
+// Deadlines and pending players
+// ============================================================================
+
+/** Number of the move phase (move1 → 1), or 0 for other phases. */
+function movePhaseNumber(phase: GamePhase): number {
+  return phase.startsWith("move") ? parseInt(phase.slice(-1), 10) : 0;
+}
+
+function isBettingPhase(phase: GamePhase): boolean {
+  return phase === "bet1" || phase === "bet2" || phase === "bet3" || phase === "finalBet";
+}
+
+/**
+ * The players who must act before the phase can advance.
+ *
+ * - move phases: whoever has fewer than phaseNumber × 2 moves
+ * - betting phases: whoever has not bet, or is behind in the pot
+ * - reveal: whoever has fewer than 7 moves
+ * - roundEnd: whoever has not confirmed; once both have, either may start
+ *   the next round, so both are pending
+ * - waiting / ended: nobody
+ */
+export function getPendingPlayers(state: GameState): PlayerRole[] {
+  const pending: PlayerRole[] = [];
+  const { phase } = state;
+
+  if (phase === "waiting" || phase === "ended") return pending;
+
+  const moveNumber = movePhaseNumber(phase);
+  if (moveNumber > 0) {
+    const expected = moveNumber * 2;
+    if (state.player1Moves.length < expected) pending.push("player1");
+    if (state.player2Moves.length < expected) pending.push("player2");
+    return pending;
+  }
+
+  if (phase === "reveal") {
+    if (state.player1Moves.length < 7) pending.push("player1");
+    if (state.player2Moves.length < 7) pending.push("player2");
+    return pending;
+  }
+
+  if (isBettingPhase(phase)) {
+    if (!state.player1BetMade || state.player1PotCoins < state.player2PotCoins) {
+      pending.push("player1");
+    }
+    if (!state.player2BetMade || state.player2PotCoins < state.player1PotCoins) {
+      pending.push("player2");
+    }
+    return pending;
+  }
+
+  if (phase === "roundEnd") {
+    if (state.player1EndedRound && state.player2EndedRound) {
+      return ["player1", "player2"];
+    }
+    if (!state.player1EndedRound) pending.push("player1");
+    if (!state.player2EndedRound) pending.push("player2");
+    return pending;
+  }
+
+  return pending;
+}
+
+/**
+ * Stamp a fresh deadline on a state that has just changed. Called after
+ * every successful action: either the phase changed, or one player's action
+ * left the other to act, and in both cases the clock restarts. Waiting and
+ * ended games carry no deadline.
+ */
+export function withDeadline(state: GameState): GameState {
+  const phaseDeadline =
+    state.phase === "waiting" || state.phase === "ended" ? null : nextDeadline();
+  return { ...state, phaseDeadline };
+}
+
+// ============================================================================
+// Joining
+// ============================================================================
 
 /**
  * Join an existing game as player 2.
  *
  * @param state - Current game state (must be in 'waiting' phase)
  * @param player2 - The player joining the game
- * @returns Updated game state with player 2 joined
  */
 export function joinGame(state: GameState, player2: Player): GameState {
   if (state.phase !== "waiting") {
-    throw new Error(`Cannot join game in phase: ${state.phase}`);
+    throw new GameError(`Cannot join game in phase: ${state.phase}`);
   }
 
   if (state.player2 !== null) {
-    throw new Error("Game already has two players");
+    throw new GameError("Game already has two players");
+  }
+
+  if (state.player1.id === player2.id) {
+    throw new GameError("Cannot join your own game");
   }
 
   // Start with the first ante
   const anteCoins = getAnte(state.roundNumber);
 
-  return {
+  return withDeadline({
     ...state,
     player2,
     phase: "move1",
@@ -95,8 +206,12 @@ export function joinGame(state: GameState, player2: Player): GameState {
     player1BetMade: true, // Ante counts as initial bet
     player2BetMade: true,
     settledPotCoins: anteCoins,
-  };
+  });
 }
+
+// ============================================================================
+// Phase transitions
+// ============================================================================
 
 /**
  * Get the next phase after a given phase.
@@ -127,9 +242,6 @@ function getNextPhase(currentPhase: GamePhase): GamePhase {
 /**
  * Check if a phase transition should happen.
  * Transitions occur when both players have completed their actions for the current phase.
- *
- * @param state - Current game state
- * @returns true if ready to transition to next phase
  */
 export function isReadyForNextPhase(state: GameState): boolean {
   const {
@@ -146,28 +258,18 @@ export function isReadyForNextPhase(state: GameState): boolean {
     case "move1":
     case "move2":
     case "move3": {
-      // Both players need to have made their move (2 values each)
-      const expectedMoves = parseInt(phase.slice(-1)) * 2;
-      return (
-        player1Moves.length >= expectedMoves &&
-        player2Moves.length >= expectedMoves
-      );
+      const expectedMoves = movePhaseNumber(phase) * 2;
+      return player1Moves.length >= expectedMoves && player2Moves.length >= expectedMoves;
     }
 
     case "bet1":
     case "bet2":
     case "bet3":
     case "finalBet": {
-      // Betting round complete when both have bet and pot coins are equal
-      return (
-        player1BetMade &&
-        player2BetMade &&
-        player1PotCoins === player2PotCoins
-      );
+      return player1BetMade && player2BetMade && player1PotCoins === player2PotCoins;
     }
 
     case "reveal": {
-      // Both players need to have made their reveal move (7th element)
       return player1Moves.length >= 7 && player2Moves.length >= 7;
     }
 
@@ -178,9 +280,6 @@ export function isReadyForNextPhase(state: GameState): boolean {
 
 /**
  * Transition to the next phase if ready.
- *
- * @param state - Current game state
- * @returns Updated game state (may be same state if not ready to transition)
  */
 export function tryTransition(state: GameState): GameState {
   if (!isReadyForNextPhase(state)) {
@@ -189,32 +288,29 @@ export function tryTransition(state: GameState): GameState {
 
   const nextPhase = getNextPhase(state.phase);
 
-  // Determine phase types
   const isMovePhase = state.phase.startsWith("move") || state.phase === "reveal";
-  const isNextBettingPhase =
-    nextPhase.startsWith("bet") || nextPhase === "finalBet";
+  const isNextBettingPhase = nextPhase.startsWith("bet") || nextPhase === "finalBet";
 
-  // Reset bet flags when transitioning from move/reveal phase to betting phase
-  // This allows players to make new bets in the upcoming betting round
+  // Entering a betting phase lets both players bet again.
   const shouldResetBetFlags = isMovePhase && isNextBettingPhase;
 
   return {
     ...state,
     phase: nextPhase,
-    // Reset bet flags when entering a new betting phase
     player1BetMade: shouldResetBetFlags ? false : state.player1BetMade,
     player2BetMade: shouldResetBetFlags ? false : state.player2BetMade,
   };
 }
 
+// ============================================================================
+// Moves
+// ============================================================================
+
 /**
  * Make a move for a player.
  *
- * @param state - Current game state
- * @param playerId - ID of the player making the move
  * @param selfColumn - Column the player chooses for themselves (0-5)
  * @param otherRow - Row the player assigns to their opponent (0-5)
- * @returns Updated game state
  */
 export function makeMove(
   state: GameState,
@@ -222,43 +318,44 @@ export function makeMove(
   selfColumn: number,
   otherRow: number
 ): GameState {
-  // Validate phase
-  if (!state.phase.startsWith("move")) {
-    throw new Error(`Cannot make move in phase: ${state.phase}`);
+  const moveNumber = movePhaseNumber(state.phase);
+  if (moveNumber === 0) {
+    throw new GameError(`Cannot make move in phase: ${state.phase}`);
   }
 
-  // Validate move values
-  if (selfColumn < 0 || selfColumn > 5 || otherRow < 0 || otherRow > 5) {
-    throw new Error("Move values must be between 0 and 5");
+  if (
+    !Number.isInteger(selfColumn) ||
+    !Number.isInteger(otherRow) ||
+    selfColumn < 0 ||
+    selfColumn > BOARD_SIZE - 1 ||
+    otherRow < 0 ||
+    otherRow > BOARD_SIZE - 1
+  ) {
+    throw new GameError("Move values must be between 0 and 5");
   }
 
-  // Determine which player
-  const isPlayer1 = state.player1.id === playerId;
-  const isPlayer2 = state.player2?.id === playerId;
+  const role = requireRole(state, playerId);
+  const ownMoves = role === "player1" ? state.player1Moves : state.player2Moves;
 
-  if (!isPlayer1 && !isPlayer2) {
-    throw new Error("Player not in this game");
+  // A player gets exactly one move per move phase.
+  if (ownMoves.length >= moveNumber * 2) {
+    throw new GameError("Already moved this phase");
   }
 
-  // Add moves
   const newState = { ...state };
-
-  if (isPlayer1) {
+  if (role === "player1") {
     newState.player1Moves = [...state.player1Moves, selfColumn, otherRow];
   } else {
     newState.player2Moves = [...state.player2Moves, selfColumn, otherRow];
   }
 
-  return tryTransition(newState);
+  return withDeadline(tryTransition(newState));
 }
 
 /**
  * Make a reveal move for a player.
  *
- * @param state - Current game state
- * @param playerId - ID of the player making the reveal
  * @param revealColumn - Which of their 3 columns to reveal (must be one they chose)
- * @returns Updated game state
  */
 export function makeRevealMove(
   state: GameState,
@@ -266,114 +363,87 @@ export function makeRevealMove(
   revealColumn: number
 ): GameState {
   if (state.phase !== "reveal") {
-    throw new Error(`Cannot make reveal move in phase: ${state.phase}`);
+    throw new GameError(`Cannot make reveal move in phase: ${state.phase}`);
   }
 
-  const isPlayer1 = state.player1.id === playerId;
-  const isPlayer2 = state.player2?.id === playerId;
+  const role = requireRole(state, playerId);
+  const playerMoves = role === "player1" ? state.player1Moves : state.player2Moves;
 
-  if (!isPlayer1 && !isPlayer2) {
-    throw new Error("Player not in this game");
+  if (playerMoves.length >= 7) {
+    throw new GameError("Already revealed this round");
   }
 
-  const playerMoves = isPlayer1 ? state.player1Moves : state.player2Moves;
-
-  // Validate that revealColumn is one of their chosen columns
   const chosenColumns = [playerMoves[0], playerMoves[2], playerMoves[4]];
   if (!chosenColumns.includes(revealColumn)) {
-    throw new Error("Reveal column must be one of your chosen columns");
+    throw new GameError("Reveal column must be one of your chosen columns");
   }
 
   const newState = { ...state };
-
-  if (isPlayer1) {
+  if (role === "player1") {
     newState.player1Moves = [...state.player1Moves, revealColumn];
   } else {
     newState.player2Moves = [...state.player2Moves, revealColumn];
   }
 
-  return tryTransition(newState);
+  return withDeadline(tryTransition(newState));
 }
 
-/**
- * Check if the game is in a betting phase.
- */
-function isBettingPhase(phase: GamePhase): boolean {
-  return (
-    phase === "bet1" ||
-    phase === "bet2" ||
-    phase === "bet3" ||
-    phase === "finalBet"
-  );
-}
+// ============================================================================
+// Betting
+// ============================================================================
 
 /**
  * Make a bet for a player.
  *
- * @param state - Current game state
- * @param playerId - ID of the player making the bet
  * @param amount - Number of coins to add to the pot (can be 0)
- * @returns Updated game state
  */
-export function makeBet(
-  state: GameState,
-  playerId: string,
-  amount: number
-): GameState {
-  // Validate phase
+export function makeBet(state: GameState, playerId: string, amount: number): GameState {
   if (!isBettingPhase(state.phase)) {
-    throw new Error(`Cannot make bet in phase: ${state.phase}`);
+    throw new GameError(`Cannot make bet in phase: ${state.phase}`);
   }
 
-  // Both players must have matching moves before betting
   if (state.player1Moves.length !== state.player2Moves.length) {
-    throw new Error("Cannot bet: moves not synchronized");
+    throw new GameError("Cannot bet: moves not synchronized");
   }
 
-  // Determine which player
-  const isPlayer1 = state.player1.id === playerId;
-  const isPlayer2 = state.player2?.id === playerId;
+  const role = requireRole(state, playerId);
+  const isPlayer1 = role === "player1";
 
-  if (!isPlayer1 && !isPlayer2) {
-    throw new Error("Player not in this game");
-  }
-
-  // Get player's perspective
   const ourCoins = isPlayer1 ? state.player1Coins : state.player2Coins;
   const theirCoins = isPlayer1 ? state.player2Coins : state.player1Coins;
   const ourPotCoins = isPlayer1 ? state.player1PotCoins : state.player2PotCoins;
   const theirPotCoins = isPlayer1 ? state.player2PotCoins : state.player1PotCoins;
   const ourBetMade = isPlayer1 ? state.player1BetMade : state.player2BetMade;
 
-  // Check if already bet this round and bets match (no more betting allowed)
   if (
     state.player1BetMade &&
     state.player2BetMade &&
     state.player1PotCoins === state.player2PotCoins
   ) {
-    throw new Error("Betting round already complete");
+    throw new GameError("Betting round already complete");
   }
 
-  // Check if player already made their bet this betting round
   if (ourBetMade && ourPotCoins >= theirPotCoins) {
-    throw new Error("Already placed bet this round");
+    throw new GameError("Already placed bet this round");
   }
 
-  // Validate bet amount
+  if (!Number.isInteger(amount)) {
+    throw new GameError("Bet amount must be a whole number of coins");
+  }
+
   if (amount < 0) {
-    throw new Error("Bet amount cannot be negative");
+    throw new GameError("Bet amount cannot be negative");
   }
 
   if (amount > ourCoins) {
-    throw new Error("Bet exceeds available coins");
+    throw new GameError("Bet exceeds available coins");
   }
 
   // Bet cannot exceed opponent's total coins (to ensure they can match)
   if (amount + ourPotCoins > theirCoins + theirPotCoins) {
-    throw new Error("Bet exceeds opponent's available coins");
+    throw new GameError("Bet exceeds opponent's available coins");
   }
 
-  // Apply the bet
   const newState = { ...state };
 
   if (isPlayer1) {
@@ -386,7 +456,6 @@ export function makeBet(
     newState.player2BetMade = true;
   }
 
-  // Update settled pot if bets now match
   if (
     newState.player1BetMade &&
     newState.player2BetMade &&
@@ -395,43 +464,76 @@ export function makeBet(
     newState.settledPotCoins = newState.player1PotCoins;
   }
 
-  return tryTransition(newState);
+  return withDeadline(tryTransition(newState));
+}
+
+// ============================================================================
+// Round resolution
+// ============================================================================
+
+/**
+ * Scores over the move pairs both players have completed. At a showdown this
+ * is the full three-cell score; after a fold it is the partial score of the
+ * cells committed so far (0 if the fold came before any move pair).
+ */
+function partialScores(state: GameState): { player1Score: number; player2Score: number } {
+  const pairs = Math.min(
+    Math.floor(state.player1Moves.length / 2),
+    Math.floor(state.player2Moves.length / 2),
+    MOVES_PER_ROUND
+  );
+  if (pairs === MOVES_PER_ROUND) {
+    const { p1Score, p2Score } = computeScores(state.board, state.player1Moves, state.player2Moves);
+    return { player1Score: p1Score, player2Score: p2Score };
+  }
+  const { p1Score, p2Score } = computeScores(
+    state.board,
+    state.player1Moves.slice(0, pairs * 2),
+    state.player2Moves.slice(0, pairs * 2),
+    pairs
+  );
+  return { player1Score: p1Score, player2Score: p2Score };
 }
 
 /**
- * Fold the current betting round, forfeiting the pot to the opponent.
- *
- * @param state - Current game state
- * @param playerId - ID of the player folding
- * @returns Updated game state with pot distributed to opponent
+ * Finish the round: hand the pot to `winner` (or return it on a tie), record
+ * the round result, and end the game if either player is out of coins.
  */
-export function foldBet(state: GameState, playerId: string): GameState {
-  // Validate phase
-  if (!isBettingPhase(state.phase)) {
-    throw new Error(`Cannot fold in phase: ${state.phase}`);
-  }
-
-  // Determine which player
-  const isPlayer1 = state.player1.id === playerId;
-  const isPlayer2 = state.player2?.id === playerId;
-
-  if (!isPlayer1 && !isPlayer2) {
-    throw new Error("Player not in this game");
-  }
-
-  const ourPotCoins = isPlayer1 ? state.player1PotCoins : state.player2PotCoins;
-  const theirPotCoins = isPlayer1 ? state.player2PotCoins : state.player1PotCoins;
-
-  // Can only fold when opponent has more in pot (they raised)
-  if (ourPotCoins >= theirPotCoins) {
-    throw new Error("Cannot fold: you are not behind in the pot");
-  }
-
-  // Opponent wins the entire pot
+function resolveRound(
+  state: GameState,
+  winner: "player1" | "player2" | "tie",
+  byFold: boolean
+): GameState {
   const totalPot = state.player1PotCoins + state.player2PotCoins;
+  const { player1Score, player2Score } = partialScores(state);
 
-  const newState: GameState = {
+  let player1Coins = state.player1Coins;
+  let player2Coins = state.player2Coins;
+
+  if (winner === "player1") {
+    player1Coins += totalPot;
+  } else if (winner === "player2") {
+    player2Coins += totalPot;
+  } else {
+    player1Coins += state.player1PotCoins;
+    player2Coins += state.player2PotCoins;
+  }
+
+  const roundResult: RoundResult = {
+    roundNumber: state.roundNumber,
+    player1Score,
+    player2Score,
+    winner,
+    potWon: winner === "tie" ? 0 : totalPot,
+    byFold,
+  };
+
+  const wipedOut = player1Coins <= 0 || player2Coins <= 0;
+
+  return withDeadline({
     ...state,
+    player1Coins,
+    player2Coins,
     player1PotCoins: 0,
     player2PotCoins: 0,
     settledPotCoins: 0,
@@ -439,135 +541,102 @@ export function foldBet(state: GameState, playerId: string): GameState {
     player2BetMade: false,
     player1EndedRound: true,
     player2EndedRound: true,
-    phase: "roundEnd",
-  };
+    roundResult,
+    phase: wipedOut ? "ended" : "roundEnd",
+  });
+}
 
-  // Give pot to the winner (opponent of folder)
-  if (isPlayer1) {
-    // Player 1 folded, player 2 wins
-    newState.player2Coins = state.player2Coins + totalPot;
-  } else {
-    // Player 2 folded, player 1 wins
-    newState.player1Coins = state.player1Coins + totalPot;
+/**
+ * Fold the current betting round, forfeiting the pot to the opponent.
+ */
+export function foldBet(state: GameState, playerId: string): GameState {
+  if (!isBettingPhase(state.phase)) {
+    throw new GameError(`Cannot fold in phase: ${state.phase}`);
   }
 
-  return newState;
+  const role = requireRole(state, playerId);
+  const isPlayer1 = role === "player1";
+
+  const ourPotCoins = isPlayer1 ? state.player1PotCoins : state.player2PotCoins;
+  const theirPotCoins = isPlayer1 ? state.player2PotCoins : state.player1PotCoins;
+
+  // Can only fold when opponent has more in pot (they raised)
+  if (ourPotCoins >= theirPotCoins) {
+    throw new GameError("Cannot fold: you are not behind in the pot");
+  }
+
+  return resolveRound(state, isPlayer1 ? "player2" : "player1", true);
 }
 
 /**
  * Signal that a player is ready to end the round.
- * When both players call this, the winner is computed and pot distributed.
- *
- * @param state - Current game state
- * @param playerId - ID of the player signaling end
- * @returns Updated game state
+ * When both players have signalled, the winner is computed and the pot distributed.
  */
 export function endRound(state: GameState, playerId: string): GameState {
-  // Can only end round after final betting when all moves complete
   if (state.phase !== "finalBet" && state.phase !== "roundEnd") {
-    throw new Error(`Cannot end round in phase: ${state.phase}`);
+    throw new GameError(`Cannot end round in phase: ${state.phase}`);
   }
 
-  // Must have all 7 moves from each player
   if (state.player1Moves.length !== 7 || state.player2Moves.length !== 7) {
-    throw new Error("Cannot end round: moves not complete");
+    throw new GameError("Cannot end round: moves not complete");
   }
 
-  // Bets must be matched
   if (state.player1PotCoins !== state.player2PotCoins) {
-    throw new Error("Cannot end round: bets not matched");
+    throw new GameError("Cannot end round: bets not matched");
   }
 
-  // Both must have made their final bet
   if (!state.player1BetMade || !state.player2BetMade) {
-    throw new Error("Cannot end round: betting not complete");
+    throw new GameError("Cannot end round: betting not complete");
   }
 
-  // Determine which player
-  const isPlayer1 = state.player1.id === playerId;
-  const isPlayer2 = state.player2?.id === playerId;
+  const role = requireRole(state, playerId);
 
-  if (!isPlayer1 && !isPlayer2) {
-    throw new Error("Player not in this game");
+  if (role === "player1" && state.player1EndedRound) {
+    throw new GameError("Already signaled round end");
   }
-
-  // Check if already ended
-  if (isPlayer1 && state.player1EndedRound) {
-    throw new Error("Already signaled round end");
-  }
-  if (isPlayer2 && state.player2EndedRound) {
-    throw new Error("Already signaled round end");
+  if (role === "player2" && state.player2EndedRound) {
+    throw new GameError("Already signaled round end");
   }
 
   const newState = { ...state };
-
-  if (isPlayer1) {
+  if (role === "player1") {
     newState.player1EndedRound = true;
   } else {
     newState.player2EndedRound = true;
   }
 
-  // If both have ended, compute winner and distribute pot
   if (newState.player1EndedRound && newState.player2EndedRound) {
-    const winner = determineWinner(
-      state.board,
-      state.player1Moves,
-      state.player2Moves
-    );
-
-    const totalPot = state.player1PotCoins + state.player2PotCoins;
-
-    if (winner === "player1") {
-      newState.player1Coins = state.player1Coins + totalPot;
-    } else if (winner === "player2") {
-      newState.player2Coins = state.player2Coins + totalPot;
-    } else {
-      // Tie: each player gets their pot back
-      newState.player1Coins = state.player1Coins + state.player1PotCoins;
-      newState.player2Coins = state.player2Coins + state.player2PotCoins;
-    }
-
-    newState.player1PotCoins = 0;
-    newState.player2PotCoins = 0;
-    newState.settledPotCoins = 0;
-    newState.phase = "roundEnd";
+    const { player1Score, player2Score } = partialScores(state);
+    const winner =
+      player1Score > player2Score ? "player1" : player2Score > player1Score ? "player2" : "tie";
+    return resolveRound(newState, winner, false);
   }
 
-  return newState;
+  return withDeadline(newState);
 }
 
 /**
  * Start the next round of the game.
- * Generates a new board, resets moves, and collects ante.
- *
- * @param state - Current game state (must be in roundEnd phase)
- * @param seed - Optional seed for deterministic board generation
- * @returns Updated game state ready for move1
+ * Generates a new board, resets moves, and collects the ante.
  */
 export function startNextRound(state: GameState, seed?: number): GameState {
-  // Can only start next round after round end
   if (state.phase !== "roundEnd") {
-    throw new Error(`Cannot start next round in phase: ${state.phase}`);
+    throw new GameError(`Cannot start next round in phase: ${state.phase}`);
   }
 
-  // Both players must have ended the round
   if (!state.player1EndedRound || !state.player2EndedRound) {
-    throw new Error("Both players must end round first");
+    throw new GameError("Both players must end round first");
   }
 
-  // Check if game should end (someone out of coins)
+  // Safety net: a round that left someone broke already ended the game in
+  // resolveRound, but a persisted roundEnd state may predate that rule.
   if (state.player1Coins <= 0 || state.player2Coins <= 0) {
-    return {
-      ...state,
-      phase: "ended",
-    };
+    return withDeadline({ ...state, phase: "ended" });
   }
 
-  // Generate new board
   const actualSeed = seed ?? Date.now();
   const newBoard = generateMagicSquare(actualSeed);
 
-  // Calculate ante for next round
   const nextRoundNumber = state.roundNumber + 1;
   let anteCoins = getAnte(nextRoundNumber);
 
@@ -579,7 +648,7 @@ export function startNextRound(state: GameState, seed?: number): GameState {
     anteCoins = state.player2Coins;
   }
 
-  return {
+  return withDeadline({
     ...state,
     board: newBoard,
     phase: "move1",
@@ -595,62 +664,48 @@ export function startNextRound(state: GameState, seed?: number): GameState {
     player1EndedRound: false,
     player2EndedRound: false,
     roundNumber: nextRoundNumber,
-  };
+  });
 }
+
+// ============================================================================
+// Leaving, abandoning
+// ============================================================================
 
 /**
  * Handle a player leaving the game mid-match.
- * The leaving player pays a penalty to the remaining player.
- *
- * @param state - Current game state
- * @param playerId - ID of the player leaving
- * @returns Updated game state with game ended
+ * The leaver forfeits the pot and pays a penalty to the remaining player.
+ * Leaving an ended game is a no-op.
  */
 export function leaveGame(state: GameState, playerId: string): GameState {
-  // If game is already ended (e.g., other player left first), just return current state
-  // This allows the remaining player to gracefully exit
   if (state.phase === "ended") {
     return state;
   }
 
   if (state.phase === "waiting") {
+    if (state.player1.id !== playerId) throw new ForbiddenError();
     // No penalty for leaving before game starts
-    return {
-      ...state,
-      phase: "ended",
-    };
+    return withDeadline({ ...state, phase: "ended" });
   }
 
-  // Determine which player is leaving
-  const isPlayer1 = state.player1.id === playerId;
-  const isPlayer2 = state.player2?.id === playerId;
+  const role = requireRole(state, playerId);
 
-  if (!isPlayer1 && !isPlayer2) {
-    throw new Error("Player not in this game");
-  }
-
-  // Calculate penalty
   const penalty = getLeavePenalty(state.roundNumber);
   const totalPot = state.player1PotCoins + state.player2PotCoins;
 
-  // Leaver loses their pot coins plus penalty from remaining coins
-  // Remaining player gets the pot plus penalty
   let player1FinalCoins = state.player1Coins;
   let player2FinalCoins = state.player2Coins;
 
-  if (isPlayer1) {
-    // Player 1 is leaving
+  if (role === "player1") {
     const actualPenalty = Math.min(penalty, state.player1Coins);
     player1FinalCoins = state.player1Coins - actualPenalty;
     player2FinalCoins = state.player2Coins + totalPot + actualPenalty;
   } else {
-    // Player 2 is leaving
     const actualPenalty = Math.min(penalty, state.player2Coins);
     player2FinalCoins = state.player2Coins - actualPenalty;
     player1FinalCoins = state.player1Coins + totalPot + actualPenalty;
   }
 
-  return {
+  return withDeadline({
     ...state,
     phase: "ended",
     player1Coins: player1FinalCoins,
@@ -658,24 +713,39 @@ export function leaveGame(state: GameState, playerId: string): GameState {
     player1PotCoins: 0,
     player2PotCoins: 0,
     settledPotCoins: 0,
-  };
+  });
 }
 
 /**
- * Check if the game has ended.
- *
- * @param state - Current game state
- * @returns true if the game is over
+ * Abandon a game both players walked away from: every coin in the pot goes
+ * back to whoever put it there and the game ends with no penalty.
  */
+export function abandonGame(state: GameState): GameState {
+  if (state.phase === "ended") {
+    return state;
+  }
+
+  return withDeadline({
+    ...state,
+    phase: "ended",
+    player1Coins: state.player1Coins + state.player1PotCoins,
+    player2Coins: state.player2Coins + state.player2PotCoins,
+    player1PotCoins: 0,
+    player2PotCoins: 0,
+    settledPotCoins: 0,
+  });
+}
+
+// ============================================================================
+// Queries
+// ============================================================================
+
 export function isGameOver(state: GameState): boolean {
   return state.phase === "ended";
 }
 
 /**
  * Check if either player is out of coins (game should end after round).
- *
- * @param state - Current game state
- * @returns true if one player has no coins left
  */
 export function shouldGameEnd(state: GameState): boolean {
   return state.player1Coins <= 0 || state.player2Coins <= 0;
@@ -683,13 +753,8 @@ export function shouldGameEnd(state: GameState): boolean {
 
 /**
  * Get the winner of the game (only valid when game has ended).
- *
- * @param state - Current game state
- * @returns The winning player, or null if tie/game not ended
  */
-export function getGameWinner(
-  state: GameState
-): "player1" | "player2" | "tie" | null {
+export function getGameWinner(state: GameState): "player1" | "player2" | "tie" | null {
   if (state.phase !== "ended") {
     return null;
   }
@@ -702,4 +767,3 @@ export function getGameWinner(
     return "tie";
   }
 }
-

@@ -1,13 +1,31 @@
 <script lang="ts">
+	/**
+	 * Auth bootstrapper, mounted once by the layout.
+	 *
+	 * privy mode: dynamically loads React and the Privy provider and forwards
+	 * its events into the auth store.
+	 *
+	 * dev mode: Privy is never loaded. The identity remembered in this browser
+	 * (localStorage `cs.devIdentity`) is restored into the auth store so a
+	 * reload keeps you signed in; otherwise the store is left signed out and
+	 * pages offer the dev-login screen.
+	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { authStore } from '$lib/auth';
+	import { config } from '$lib/config';
+	import { loadStoredDevIdentity } from '$lib/dev/identities';
 	import type { Root } from 'react-dom/client';
 	import type { PrivyEvent } from './types';
 
 	let container: HTMLDivElement;
 	let root: Root | null = null;
 
-	onMount(async () => {
+	onMount(() => {
+		if (config.authMode === 'dev') {
+			authStore.setDevIdentity(loadStoredDevIdentity());
+			return;
+		}
+
 		// Dynamically import React and the Privy provider
 		Promise.all([import('react'), import('react-dom/client'), import('./PrivyProvider')])
 			.then(([React, ReactDOM, { PrivyProviderWrapper }]) => {

@@ -85,15 +85,19 @@ The project uses smart contracts on Base Sepolia testnet for USDC escrow:
 
 ### Environment Variables
 
-**Server** (`packages/server/.env`):
-- `PRIVY_APP_ID` - Privy application ID
-- `PRIVY_APP_SECRET` - Privy application secret
-- `BASE_SEPOLIA_RPC_URL` - Base Sepolia RPC endpoint
+**Server** (`packages/server/.env`, see `packages/server/.env.example` for Anvil and Sepolia examples):
+- `AUTH_MODE` - `privy` or `dev` (`dev` accepts `Bearer dev:<userId>` tokens; refused in production)
+- `PRIVY_APP_ID`, `PRIVY_APP_SECRET` - Privy credentials (required when `AUTH_MODE=privy`)
+- `CHAIN_ID` - `31337` (Anvil) or `84532` (Base Sepolia)
+- `RPC_URL` - JSON-RPC endpoint (`BASE_SEPOLIA_RPC_URL` accepted as an alias)
 - `GAME_ESCROW_CONTRACT_ADDRESS` - Deployed escrow contract address
 - `USDC_CONTRACT_ADDRESS` - USDC token address (testnet: `0x036CbD53842c5426634e7929C8C4E5b8c0C5b6E8`)
-- `SERVER_WALLET_PRIVATE_KEY` - Server wallet private key (for payouts)
+- `SERVER_WALLET_PRIVATE_KEY` - Server wallet private key (signs settlements and cancellations)
+- `TURN_TIMEOUT_SECONDS` - Seconds a player has to act before being forfeited (default 120; 0 disables)
+- `SETTLEMENT_ENABLED` - `true` to verify deposits and settle on chain; `false` for engine-only play (default true)
 - `CORS_ALLOWED_ORIGINS` - Comma-separated allowlist of origins (required in production)
 - `LOG_LEVEL` - Structured log level (`debug`, `info`, `warn`, `error`)
+- `PORT`, `DATABASE_PATH` - HTTP port (default 3001) and SQLite path
 
 **Frontend** (`packages/web/.env`):
 - `VITE_API_URL` - Backend API URL

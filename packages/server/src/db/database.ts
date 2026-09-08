@@ -8,6 +8,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "fs";
 import { dirname } from "path";
 import { runMigrations } from "./migrations";
+import { config } from "../config/env";
 
 let db: Database | null = null;
 
@@ -18,7 +19,7 @@ let db: Database | null = null;
 export function getDatabase(): Database {
   if (!db) {
     // Resolve database path - use absolute path relative to server package
-    let dbPath = process.env.DATABASE_PATH;
+    let dbPath = config.databasePath;
     
     if (!dbPath) {
       // Get the server package directory (go up from src/db to server package root)
@@ -26,14 +27,15 @@ export function getDatabase(): Database {
       dbPath = `${serverDir}/data/civil-sarabande.db`;
     }
     
-    // Ensure the directory exists
-    const dbDir = dirname(dbPath);
-    try {
-      mkdirSync(dbDir, { recursive: true });
-      console.log(`Database directory created/verified: ${dbDir}`);
-    } catch (err) {
-      console.error(`Failed to create database directory: ${dbDir}`, err);
-      throw new Error(`Cannot create database directory: ${dbDir}`);
+    // Ensure the directory exists (not needed for in-memory databases)
+    if (dbPath !== ":memory:") {
+      const dbDir = dirname(dbPath);
+      try {
+        mkdirSync(dbDir, { recursive: true });
+      } catch (err) {
+        console.error(`Failed to create database directory: ${dbDir}`, err);
+        throw new Error(`Cannot create database directory: ${dbDir}`);
+      }
     }
 
     try {

@@ -90,6 +90,25 @@ export function runMigrations(db: Database): void {
     // Column already exists, ignore
   }
 
+  // Escrow lifecycle, settlement, turn clock and round result columns.
+  // ALTER TABLE ... ADD COLUMN is not idempotent in SQLite, so each is
+  // attempted and the "duplicate column" error ignored.
+  const escrowColumns: Array<[string, string]> = [
+    ["escrow_status", "TEXT NOT NULL DEFAULT 'unfunded'"],
+    ["player1_payout", "TEXT"],
+    ["player2_payout", "TEXT"],
+    ["settlement_error", "TEXT"],
+    ["phase_deadline", "INTEGER"],
+    ["round_result", "TEXT"],
+  ];
+  for (const [column, definition] of escrowColumns) {
+    try {
+      db.exec(`ALTER TABLE games ADD COLUMN ${column} ${definition}`);
+    } catch {
+      // Column already exists, ignore
+    }
+  }
+
   // Create game_history table
   db.exec(`
     CREATE TABLE IF NOT EXISTS game_history (
@@ -128,6 +147,14 @@ export function runMigrations(db: Database): void {
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_games_player2 ON games(player2_id)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_games_escrow_status ON games(escrow_status)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_games_phase_deadline ON games(phase_deadline)
   `);
 
   db.exec(`

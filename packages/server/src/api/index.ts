@@ -4,4 +4,7 @@
  */
 
 export * from "./routes";
-
+export * from "./userRoutes";
+export * from "./wallet";
+export * from "./devRoutes";
+export * from "./configRoute";

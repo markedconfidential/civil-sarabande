@@ -3,13 +3,17 @@
 	import type { GamePhase } from '@civil-sarabande/shared';
 	import { getPhaseDisplayName } from '$lib/game/phases';
 	import { quickFade } from '$lib/motion';
+	import Countdown from './Countdown.svelte';
 
 	export let phase: GamePhase;
 	export let roundNumber: number;
 	export let connectionStatus: string;
 	export let disabled = false;
+	/** Epoch ms deadline for the pending action, or null when no clock runs */
+	export let deadline: number | null = null;
+	export let yourTurn = false;
 
-	const dispatch = createEventDispatcher<{ leave: void }>();
+	const dispatch = createEventDispatcher<{ leave: void; expired: void }>();
 </script>
 
 <header class="game-header">
@@ -22,6 +26,7 @@
 		{/key}
 	</div>
 	<div class="header-actions">
+		<Countdown {deadline} {yourTurn} on:expired={() => dispatch('expired')} />
 		<span class="status-badge status-badge--{connectionStatus}">
 			{connectionStatus}
 		</span>

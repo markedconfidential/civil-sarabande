@@ -12,11 +12,12 @@ import {
 	useWallets,
 	type User
 } from '@privy-io/react-auth';
-import { base, baseSepolia } from 'viem/chains';
+import { baseSepolia } from 'viem/chains';
+import { config, chain } from '$lib/config';
 import type { EthereumProviderLike, PrivyEvent } from './types';
 
-// Privy app ID from environment
-const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || '';
+// Privy app ID from the validated client config
+const PRIVY_APP_ID = config.privyAppId;
 
 // Props for the provider
 interface PrivyProviderProps {
@@ -137,8 +138,8 @@ export function PrivyProviderWrapper({ onEvent }: PrivyProviderProps) {
 					createOnLogin: 'users-without-wallets',
 					showWalletUIs: true
 				},
-				defaultChain: baseSepolia, // Use Base Sepolia for testnet
-				supportedChains: [baseSepolia, base] // Support both testnet and mainnet
+				defaultChain: chain, // From VITE_CHAIN_ID (Base Sepolia or local Anvil)
+				supportedChains: chain.id === baseSepolia.id ? [chain] : [chain, baseSepolia]
 			}}
 		>
 			<PrivyAuthSync onEvent={handleEvent} />

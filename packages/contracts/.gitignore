@@ -1,9 +1,10 @@
-# Foundry
+# Foundry build artifacts
 out/
 cache/
 broadcast/
-lib/
+
+# Local Anvil deployment (base-sepolia.json is committed)
+deployments/local.json
 
 # Environment
 .env
-.env.local

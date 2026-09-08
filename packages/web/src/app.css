@@ -1,8 +1,17 @@
 /**
  * Civil Sarabande - Global Styles
  * 
- * A dark, ritualistic aesthetic inspired by Cordial Minuet's occult themes.
- * Color palette: deep burgundy, gold accents, parchment tones on dark backgrounds.
+ * Watercolor beneath, pixel sprite above. Painted washes (Layer 1) under
+ * pixel-edged JRPG windows and an inked board (Layer 2), with sprites
+ * (Layer 3) and floating FX (Layer 4) on top. See docs/art-bible.md.
+ *
+ * Global classes pages should use:
+ *   .card / .action-panel        parchment JRPG window (default)
+ *   .card--ink, .card--blood     ink / blood window variants (also on .action-panel)
+ *   .jrpg-window(--parchment|--ink|--blood)   the same frame on any element
+ *   .btn-primary / .btn-gold / .btn-secondary / .btn-danger   pixel-edged buttons
+ *   .wash-layer--{lobby,duel,settlement}      full-bleed watercolor (layout)
+ *   body[data-scene='settlement']             switch the wash to the vault
  */
 
 /* ============================================================================
@@ -110,6 +119,50 @@ body::before {
 }
 
 /* ============================================================================
+   Watercolor wash layer (Layer 1). Painted SVG backgrounds, image-rendering
+   auto, a slow breathing loop. Sits under the body gradient above.
+   ============================================================================ */
+
+.wash-layer {
+  position: fixed;
+  inset: -4%;
+  z-index: -2;
+  pointer-events: none;
+  background-color: var(--color-bg-dark);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  image-rendering: auto;
+  opacity: 0.82;
+  animation: wash-breathe 18s ease-in-out infinite alternate;
+  transform-origin: center;
+}
+
+.wash-layer--lobby { background-image: url('/art/backgrounds/lobby.svg'); }
+.wash-layer--duel { background-image: url('/art/backgrounds/duel.svg'); }
+.wash-layer--settlement,
+body[data-scene='settlement'] .wash-layer { background-image: url('/art/backgrounds/settlement.svg'); }
+
+@keyframes wash-breathe {
+  0% { transform: scale(1) translate(0, 0); filter: saturate(1); }
+  100% { transform: scale(1.04) translate(0.6%, -0.4%); filter: saturate(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wash-layer { animation: none; }
+}
+
+/* Fixed top-right chrome (mute toggle) */
+.top-chrome {
+  position: fixed;
+  top: var(--space-md);
+  right: var(--space-md);
+  z-index: 50;
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* ============================================================================
    Typography
    ============================================================================ */
 
@@ -170,18 +223,173 @@ a:hover {
   min-height: 100vh;
 }
 
-.card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-cell-border);
-  border-radius: var(--radius-lg);
+/* ---------------------------------------------------------------------------
+   JRPG windows (Layer 2, ink). A pixel double border with corner studs over a
+   painted interior. `.card` and `.action-panel` are parchment windows by
+   default; `.jrpg-window--ink` is for status chrome; `.jrpg-window--blood`
+   for danger. Add the variant class to any of them to switch.
+   --------------------------------------------------------------------------- */
+
+.card,
+.action-panel,
+.jrpg-window {
+  position: relative;
   padding: var(--space-lg);
-  margin-bottom: var(--space-lg);
-  box-shadow: var(--shadow-md);
+  border: 2px solid #0d0a0e;
+  border-radius: 0;
+  box-shadow:
+    0 0 0 2px var(--win-edge),
+    0 0 0 4px #0d0a0e,
+    inset 0 0 0 2px var(--win-inner),
+    6px 6px 0 0 rgba(13, 10, 14, 0.45);
+  background-color: var(--win-fill-b);
+  background-image:
+    /* corner studs */
+    linear-gradient(var(--win-edge), var(--win-edge)),
+    linear-gradient(var(--win-edge), var(--win-edge)),
+    linear-gradient(var(--win-edge), var(--win-edge)),
+    linear-gradient(var(--win-edge), var(--win-edge)),
+    /* painted interior */
+    var(--win-fill);
+  background-size: 6px 6px, 6px 6px, 6px 6px, 6px 6px, 100% 100%;
+  background-position: 4px 4px, calc(100% - 4px) 4px, 4px calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), 0 0;
+  background-repeat: no-repeat;
+  color: var(--win-text);
+  margin: 4px 4px calc(var(--space-lg) + 4px) 4px;
+}
+
+/* Parchment (default): dark text tokens inside */
+.card,
+.action-panel,
+.jrpg-window,
+.jrpg-window--parchment {
+  --win-fill: linear-gradient(160deg, #f1e6cf 0%, #e6d7b6 55%, #d9c8a5 100%);
+  --win-fill-b: #e6d7b6;
+  --win-edge: #c9a227;
+  --win-inner: #b8a27c;
+  --win-text: #2a2230;
+
+  --color-text: #2a2230;
+  --color-text-dim: #4a3f52;
+  --color-text-muted: #6b5f70;
+  --color-bg-dark: #d2c09b;
+  --color-bg-surface: #dccbaa;
+  --color-bg-elevated: #e9dcbf;
+  --color-bg-card: #e6d7b6;
+  --color-cell-border: #b8a27c;
+  --color-primary-light: #8b4049;
+  --color-gold: #9a7d1c;
+  --color-gold-bright: #b8901f;
+  --color-success: #2f6b40;
+  --color-error: #8f3535;
+}
+
+.jrpg-window--ink,
+.card--ink,
+.action-panel--ink {
+  --win-fill: linear-gradient(160deg, #2a2230 0%, #1a1520 60%, #0d0a0e 100%);
+  --win-fill-b: #1a1520;
+  --win-edge: #e6bb3a;
+  --win-inner: #4a3f52;
+  --win-text: #f1e6cf;
+
+  --color-text: #e8e4eb;
+  --color-text-dim: #9a9498;
+  --color-text-muted: #6a6269;
+  --color-bg-dark: #0d0a0e;
+  --color-bg-surface: #1a1520;
+  --color-bg-elevated: #252030;
+  --color-bg-card: #1e1925;
+  --color-cell-border: #3a3040;
+  --color-primary-light: #a85560;
+  --color-gold: #c9a227;
+  --color-gold-bright: #e6bb3a;
+  --color-success: #4a8b5c;
+  --color-error: #a84545;
+}
+
+.jrpg-window--blood,
+.card--blood,
+.action-panel--blood {
+  --win-fill: linear-gradient(160deg, #8b4049 0%, #6d2f38 70%, #4d2028 100%);
+  --win-fill-b: #6d2f38;
+  --win-edge: #f5dc7a;
+  --win-inner: #a84545;
+  --win-text: #f1e6cf;
+
+  --color-text: #f1e6cf;
+  --color-text-dim: #e0c9c9;
+  --color-text-muted: #d08090;
+  --color-bg-dark: #4d2028;
+  --color-bg-surface: #5c2730;
+  --color-bg-elevated: #7a3a42;
+  --color-bg-card: #6d2f38;
+  --color-cell-border: #a84545;
+  --color-primary-light: #d08090;
+  --color-gold: #f5dc7a;
+  --color-gold-bright: #f5dc7a;
+  --color-success: #8fd0a0;
+  --color-error: #f5dc7a;
+}
+
+.jrpg-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  margin-bottom: var(--space-xs);
+}
+
+/* Headings inside windows */
+.card h2,
+.action-panel h2,
+.jrpg-window h2 {
+  color: var(--color-primary-light);
+  border-bottom-color: var(--color-cell-border);
+}
+
+.card h1,
+.action-panel h1 {
+  color: var(--color-gold);
+}
+
+.card a:not([class]),
+.action-panel a:not([class]) {
+  color: #6d2f38;
+  text-decoration: underline;
+}
+
+/* Alerts inside parchment windows use the darker semantic tones */
+.card .alert--error,
+.action-panel .alert--error {
+  background: rgba(168, 69, 69, 0.14);
+  color: #7a2e2e;
+}
+
+.card .alert--success,
+.action-panel .alert--success {
+  background: rgba(74, 139, 92, 0.16);
+  color: #2f6b40;
+}
+
+.card .alert--warning,
+.action-panel .alert--warning {
+  color: #7a6216;
+}
+
+.card .alert--info,
+.action-panel .alert--info {
+  color: #4a3f52;
+}
+
+.card code,
+.action-panel code {
+  color: #6d2f38;
 }
 
 .card--elevated {
-  background: var(--color-bg-elevated);
-  box-shadow: var(--shadow-lg);
+  --win-fill: linear-gradient(160deg, #f6eddb 0%, #ecdfc2 55%, #e0cfae 100%);
 }
 
 .grid {
@@ -215,16 +423,16 @@ select {
   font-size: 1rem;
   color: var(--color-text);
   background: var(--color-bg-dark);
-  border: 1px solid var(--color-cell-border);
-  border-radius: var(--radius-md);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  border: 2px solid #0d0a0e;
+  border-radius: 0;
+  box-shadow: inset 2px 2px 0 0 rgba(13, 10, 14, 0.25);
+  transition: box-shadow 0.2s ease;
 }
 
 input:focus,
 select:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(139, 64, 73, 0.2);
+  box-shadow: inset 2px 2px 0 0 rgba(13, 10, 14, 0.25), 0 0 0 2px #c9a227;
 }
 
 input:disabled,
@@ -248,10 +456,15 @@ button {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: var(--space-sm) var(--space-lg);
-  border: none;
-  border-radius: var(--radius-md);
+  border: 2px solid #0d0a0e;
+  border-radius: 0;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, box-shadow 0.1s ease, transform 0.1s ease;
+  box-shadow:
+    inset 0 0 0 1px var(--btn-inner, rgba(241, 230, 207, 0.25)),
+    3px 3px 0 0 #0d0a0e;
+  color: #e8e4eb;
+  background: #2a2230;
 }
 
 button:disabled {
@@ -259,51 +472,56 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button:not(:disabled):active {
+  transform: translate(2px, 2px);
+  box-shadow:
+    inset 0 0 0 1px var(--btn-inner, rgba(241, 230, 207, 0.25)),
+    1px 1px 0 0 #0d0a0e;
+}
+
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: var(--color-text);
-  border: 1px solid var(--color-primary-light);
-  box-shadow: var(--shadow-sm);
+  --btn-inner: #d08090;
+  background: linear-gradient(180deg, #a85560 0%, #8b4049 50%, #6d2f38 100%);
+  color: #f1e6cf;
+  text-shadow: 1px 1px 0 #0d0a0e;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
-  box-shadow: var(--shadow-glow);
-  transform: translateY(-1px);
+  background: linear-gradient(180deg, #c06a76 0%, #a85560 50%, #8b4049 100%);
 }
 
 .btn-secondary {
-  background: transparent;
-  color: var(--color-text-dim);
-  border: 1px solid var(--color-cell-border);
+  --btn-inner: #4a3f52;
+  background: #1a1520;
+  color: #d9c8a5;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--color-bg-elevated);
-  color: var(--color-text);
-  border-color: var(--color-text-dim);
+  background: #2a2230;
+  color: #f1e6cf;
 }
 
 .btn-gold {
-  background: linear-gradient(135deg, var(--color-gold) 0%, var(--color-gold-dim) 100%);
-  color: var(--color-bg-dark);
-  border: 1px solid var(--color-gold-bright);
+  --btn-inner: #f5dc7a;
+  background: linear-gradient(180deg, #e6bb3a 0%, #c9a227 50%, #9a7d1c 100%);
+  color: #0d0a0e;
+  text-shadow: 1px 1px 0 rgba(245, 220, 122, 0.5);
 }
 
 .btn-gold:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--color-gold-bright) 0%, var(--color-gold) 100%);
-  box-shadow: 0 0 20px rgba(201, 162, 39, 0.4);
-  transform: translateY(-1px);
+  background: linear-gradient(180deg, #f5dc7a 0%, #e6bb3a 50%, #c9a227 100%);
 }
 
+/* Blood: fold, leave, forfeit */
 .btn-danger {
-  background: var(--color-error);
-  color: var(--color-text);
-  border: 1px solid #c25555;
+  --btn-inner: #d08090;
+  background: linear-gradient(180deg, #c25555 0%, #a84545 50%, #7a2e2e 100%);
+  color: #f1e6cf;
+  text-shadow: 1px 1px 0 #0d0a0e;
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #c25555;
+  background: linear-gradient(180deg, #d06666 0%, #c25555 50%, #a84545 100%);
 }
 
 /* Links styled as buttons get the same chrome as <button> */
@@ -320,8 +538,12 @@ a.btn-danger {
   text-decoration: none;
   text-align: center;
   padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-md);
-  transition: all 0.2s ease;
+  border: 2px solid #0d0a0e;
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 0 1px var(--btn-inner, rgba(241, 230, 207, 0.25)),
+    3px 3px 0 0 #0d0a0e;
+  transition: background-color 0.15s ease;
 }
 
 .btn-sm {
@@ -387,9 +609,10 @@ a.btn-danger {
   font-family: var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-cell-border);
+  border-radius: 0;
+  background: #1a1520;
+  border: 2px solid #0d0a0e;
+  box-shadow: 0 0 0 1px currentColor;
 }
 
 .status-badge::before {
@@ -402,17 +625,14 @@ a.btn-danger {
 
 .status-badge--connected {
   color: var(--color-success);
-  border-color: var(--color-success);
 }
 
 .status-badge--disconnected {
   color: var(--color-error);
-  border-color: var(--color-error);
 }
 
 .status-badge--connecting {
   color: var(--color-warning);
-  border-color: var(--color-warning);
 }
 
 .status-badge--connecting::before {
@@ -452,6 +672,9 @@ a.btn-danger {
 
 /* ============================================================================
    Game Board
+   Parchment cells (wash) under an ink grid; numerals are Numeral sprites.
+   Cell highlight classes are the contract: your-column, their-row, scored,
+   preview-column, preview-row, preview-intersection, revealed-column.
    ============================================================================ */
 
 .board-container {
@@ -461,87 +684,177 @@ a.btn-danger {
   margin: var(--space-lg) 0;
 }
 
+/* The frame carries the ink border, the parchment, and the overlays. */
+.board-frame {
+  position: relative;
+  display: inline-block;
+  padding: 0;
+  border: 2px solid #0d0a0e;
+  box-shadow:
+    0 0 0 2px #9a7d1c,
+    0 0 0 4px #0d0a0e,
+    8px 8px 0 0 rgba(13, 10, 14, 0.5),
+    var(--shadow-glow);
+  background: #1a1520;
+  max-width: 100%;
+}
+
+/* Parchment under the cell area only */
+.board-frame::before {
+  content: '';
+  position: absolute;
+  top: var(--board-head);
+  left: var(--board-head);
+  width: calc(var(--board-cell) * 6);
+  height: calc(var(--board-cell) * 6);
+  background-image: var(--vignette-url), var(--parchment-url);
+  background-color: #d9c8a5;
+  background-size: 100% 100%, 96px 96px;
+  image-rendering: auto;
+  z-index: 0;
+}
+
 .board {
+  position: relative;
+  z-index: 1;
   border-collapse: collapse;
-  background: var(--color-bg-surface);
-  border: 2px solid var(--color-primary-dark);
-  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  border-spacing: 0;
+  background: transparent;
+  table-layout: fixed;
 }
 
 .board th,
 .board td {
   width: var(--board-cell);
   height: var(--board-cell);
+  padding: 0;
   text-align: center;
   vertical-align: middle;
-  border: 1px solid var(--color-cell-border);
+  border: none;
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: 600;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .board th {
-  background: var(--color-bg-elevated);
+  background: #1a1520;
   color: var(--color-text-dim);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 400;
   width: var(--board-head);
   height: var(--board-head);
+  letter-spacing: 0.05em;
 }
 
 .board td {
-  background: var(--color-cell-bg);
-  color: var(--color-text);
+  position: relative;
+  background-color: transparent;
+  color: #0d0a0e;
   cursor: default;
+  line-height: 0;
+}
+
+/* Numerals centre in the cell. At 2× the sprite is 48px; cells narrower than
+   52px (very small phones) shrink it by CSS width so it never overflows. */
+.board td .numeral {
+  display: inline-block;
+  line-height: 0;
+}
+
+.board td .numeral svg {
+  width: min(48px, calc(var(--board-cell) - 4px));
+  height: auto;
 }
 
 .board td:hover {
-  background: var(--color-cell-hover);
+  background-color: rgba(42, 34, 48, 0.08);
 }
 
-/* Cell highlighting classes */
+/* --- Washes -------------------------------------------------------------
+   Translucent watercolor with a wet edge: a soft centre plus a darker rim
+   from layered radial gradients. Burgundy also carries a vertical stroke
+   (columns), gold a horizontal one (rows), so shape backs up color. */
+
 .board td.your-column {
-  background: var(--color-cell-your-col);
-  border-left: 2px solid var(--color-primary);
-  border-right: 2px solid var(--color-primary);
+  background-image:
+    linear-gradient(90deg, rgba(109, 47, 56, 0.85) 0 3px, transparent 3px calc(100% - 3px), rgba(109, 47, 56, 0.85) calc(100% - 3px)),
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(139, 64, 73, 0.28) 0%, rgba(139, 64, 73, 0.34) 62%, rgba(109, 47, 56, 0.5) 74%, rgba(139, 64, 73, 0.16) 84%, rgba(139, 64, 73, 0) 100%),
+    linear-gradient(rgba(139, 64, 73, 0.14), rgba(139, 64, 73, 0.14));
 }
 
 .board td.their-row {
-  background: var(--color-cell-their-row);
-  border-top: 2px solid var(--color-gold-dim);
-  border-bottom: 2px solid var(--color-gold-dim);
+  background-image:
+    linear-gradient(180deg, rgba(154, 125, 28, 0.9) 0 3px, transparent 3px calc(100% - 3px), rgba(154, 125, 28, 0.9) calc(100% - 3px)),
+    radial-gradient(ellipse 60% 70% at 45% 50%, rgba(201, 162, 39, 0.3) 0%, rgba(201, 162, 39, 0.36) 62%, rgba(154, 125, 28, 0.55) 74%, rgba(201, 162, 39, 0.18) 84%, rgba(201, 162, 39, 0) 100%),
+    linear-gradient(rgba(201, 162, 39, 0.16), rgba(201, 162, 39, 0.16));
 }
 
 .board td.scored {
-  background: var(--color-cell-scored);
-  border: 2px solid var(--color-cell-scored-border);
-  color: var(--color-gold);
-  box-shadow: inset 0 0 10px rgba(139, 64, 73, 0.3);
+  background-image:
+    radial-gradient(ellipse 72% 72% at 50% 50%, rgba(139, 64, 73, 0.5) 0%, rgba(139, 64, 73, 0.55) 60%, rgba(109, 47, 56, 0.75) 76%, rgba(139, 64, 73, 0.3) 88%, rgba(139, 64, 73, 0) 100%),
+    linear-gradient(rgba(109, 47, 56, 0.3), rgba(109, 47, 56, 0.3));
+  box-shadow: inset 0 0 0 2px #c9a227, inset 0 0 0 3px rgba(13, 10, 14, 0.7);
   animation: cell-scored 600ms ease-out;
 }
 
 /* One-shot glow when a cell becomes a scored intersection */
 @keyframes cell-scored {
   0% {
-    box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.75), inset 0 0 10px rgba(139, 64, 73, 0.3);
+    box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.75), inset 0 0 0 2px #c9a227, inset 0 0 0 3px rgba(13, 10, 14, 0.7);
   }
   100% {
-    box-shadow: 0 0 0 12px rgba(201, 162, 39, 0), inset 0 0 10px rgba(139, 64, 73, 0.3);
+    box-shadow: 0 0 0 12px rgba(201, 162, 39, 0), inset 0 0 0 2px #c9a227, inset 0 0 0 3px rgba(13, 10, 14, 0.7);
   }
+}
+
+/* The opponent's revealed column: a gold ink frame */
+.board td.revealed-column {
+  box-shadow: inset 0 0 0 2px #c9a227, inset 0 0 0 4px rgba(13, 10, 14, 0.75);
+}
+
+.board td.revealed-column.scored {
+  box-shadow: inset 0 0 0 2px #f5dc7a, inset 0 0 0 4px #9a7d1c, inset 0 0 0 5px rgba(13, 10, 14, 0.75);
 }
 
 .board td.scored-opponent {
-  background: rgba(201, 162, 39, 0.3);
-  border: 2px solid var(--color-gold-dim);
-  color: var(--color-gold-bright);
+  background-image: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(201, 162, 39, 0.4), rgba(201, 162, 39, 0));
+  box-shadow: inset 0 0 0 2px #9a7d1c;
 }
 
 .board td.intersection {
-  background: linear-gradient(135deg, var(--color-cell-your-col) 50%, var(--color-cell-their-row) 50%);
+  background-image: linear-gradient(135deg, rgba(139, 64, 73, 0.3) 50%, rgba(201, 162, 39, 0.3) 50%);
+}
+
+/* Preview (composing a move): dashed strokes in the player's hue */
+.board td.preview-column {
+  background-image:
+    repeating-linear-gradient(180deg, rgba(139, 64, 73, 0.9) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(180deg, rgba(139, 64, 73, 0.9) 0 4px, transparent 4px 8px),
+    linear-gradient(rgba(139, 64, 73, 0.14), rgba(139, 64, 73, 0.14));
+  background-size: 2px 100%, 2px 100%, 100% 100%;
+  background-position: 1px 0, calc(100% - 1px) 0, 0 0;
+  background-repeat: no-repeat;
+}
+
+.board td.preview-row {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(154, 125, 28, 0.95) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(90deg, rgba(154, 125, 28, 0.95) 0 4px, transparent 4px 8px),
+    linear-gradient(rgba(201, 162, 39, 0.16), rgba(201, 162, 39, 0.16));
+  background-size: 100% 2px, 100% 2px, 100% 100%;
+  background-position: 0 1px, 0 calc(100% - 1px), 0 0;
+  background-repeat: no-repeat;
+}
+
+.board td.preview-intersection {
+  background-image:
+    radial-gradient(ellipse 72% 72% at 50% 50%, rgba(139, 64, 73, 0.4) 0%, rgba(109, 47, 56, 0.6) 76%, rgba(139, 64, 73, 0) 100%);
+  box-shadow: inset 0 0 0 2px #8b4049;
 }
 
 /* Row/column headers */
+.board .corner,
 .board .row-header,
 .board .col-header {
   background: transparent;
@@ -549,9 +862,7 @@ a.btn-danger {
 }
 
 .board .row-header {
-  text-align: right;
-  padding-right: var(--space-sm);
-  color: var(--color-gold-dim);
+  color: var(--color-gold);
 }
 
 .board .col-header {
@@ -609,8 +920,9 @@ a.btn-danger {
   justify-content: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-lg);
-  background: var(--color-bg-elevated);
-  border-radius: var(--radius-lg);
+  background: linear-gradient(160deg, #2a2230, #1a1520);
+  border: 2px solid #0d0a0e;
+  box-shadow: 0 0 0 1px #9a7d1c, 3px 3px 0 0 rgba(13, 10, 14, 0.5);
   font-family: var(--font-display);
   font-size: 0.875rem;
   letter-spacing: 0.1em;
@@ -630,10 +942,6 @@ a.btn-danger {
    ============================================================================ */
 
 .action-panel {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-primary-dark);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
   margin-top: var(--space-lg);
 }
 
@@ -685,18 +993,20 @@ a.btn-danger {
 
 .player-card {
   flex: 1;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-cell-border);
-  border-radius: var(--radius-lg);
+  min-width: 0;
+  background: linear-gradient(160deg, #2a2230 0%, #1a1520 70%);
+  border: 2px solid #0d0a0e;
+  box-shadow: 0 0 0 2px var(--player-edge, #4a3f52), 4px 4px 0 0 rgba(13, 10, 14, 0.5);
   padding: var(--space-md);
+  margin: 2px 2px 4px 2px;
 }
 
 .player-card--you {
-  border-color: var(--color-primary);
+  --player-edge: #8b4049;
 }
 
 .player-card--opponent {
-  border-color: var(--color-gold-dim);
+  --player-edge: #9a7d1c;
 }
 
 .player-name {
@@ -729,10 +1039,15 @@ a.btn-danger {
 
 .pot-display {
   text-align: center;
-  padding: var(--space-lg);
-  background: linear-gradient(135deg, var(--color-bg-elevated) 0%, var(--color-bg-card) 100%);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-gold-dim);
+  padding: var(--space-md) var(--space-lg);
+  background: linear-gradient(160deg, #2a2230 0%, #0d0a0e 100%);
+  border: 2px solid #0d0a0e;
+  box-shadow: 0 0 0 2px #c9a227, 4px 4px 0 0 rgba(13, 10, 14, 0.5);
+  margin: 2px 2px 4px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .pot-label {
@@ -748,6 +1063,8 @@ a.btn-danger {
   font-weight: 700;
   color: var(--color-gold);
   text-shadow: 0 0 20px rgba(201, 162, 39, 0.3);
+  line-height: 1;
+  margin-top: var(--space-xs);
 }
 
 /* ============================================================================
@@ -758,9 +1075,10 @@ a.btn-danger {
   display: flex;
   justify-content: center;
   gap: var(--space-xl);
-  padding: var(--space-md);
-  background: var(--color-bg-dark);
-  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-lg);
+  background: linear-gradient(160deg, #2a2230, #1a1520);
+  border: 2px solid #0d0a0e;
+  box-shadow: 0 0 0 1px #4a3f52;
   margin-top: var(--space-md);
 }
 
@@ -840,13 +1158,13 @@ a.btn-danger {
   align-items: center;
   padding: var(--space-md);
   background: var(--color-bg-dark);
-  border: 1px solid var(--color-cell-border);
-  border-radius: var(--radius-md);
-  transition: border-color 0.2s ease;
+  border: 2px solid #0d0a0e;
+  box-shadow: inset 0 0 0 1px var(--color-cell-border);
+  transition: box-shadow 0.2s ease;
 }
 
 .game-item:hover {
-  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px #8b4049;
 }
 
 .game-item-info {
@@ -1015,7 +1333,7 @@ a.btn-danger {
 @media (max-width: 768px) {
   :root {
     font-size: 14px;
-    --board-cell: 48px;
+    --board-cell: 52px;
     --board-head: 32px;
   }
 
@@ -1031,6 +1349,20 @@ a.btn-danger {
   .card,
   .action-panel {
     padding: var(--space-md);
+  }
+
+  .board-frame {
+    box-shadow:
+      0 0 0 2px #9a7d1c,
+      0 0 0 4px #0d0a0e,
+      4px 4px 0 0 rgba(13, 10, 14, 0.5);
+  }
+
+  /* Out of the header's way on phones */
+  .top-chrome {
+    top: auto;
+    bottom: var(--space-sm);
+    right: var(--space-sm);
   }
 
   /* Compact three-up players bar: you | pot | them */
@@ -1085,8 +1417,10 @@ a.btn-danger {
 
 @media (max-width: 480px) {
   :root {
-    /* Fit six cells plus the header column within the viewport */
-    --board-cell: min(48px, calc((100vw - 72px) / 6));
+    /* Fit six cells plus the header column within the viewport. 52px keeps
+       the 48px numeral at an exact 2x down to a 390px viewport; narrower
+       phones shrink the cell (and the sprite, by CSS width) to fit. */
+    --board-cell: min(52px, calc((100vw - 72px) / 6));
     --board-head: 28px;
   }
 

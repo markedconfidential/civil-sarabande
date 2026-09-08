@@ -5,291 +5,333 @@ import "./interfaces/IERC20.sol";
 
 /**
  * @title GameEscrow
- * @dev Escrow contract for Civil Sarabande game funds
- * Handles USDC deposits for game stakes, bets, and winner payouts
+ * @notice USDC escrow for Civil Sarabande games (v2).
+ *
+ * Each player escrows exactly `stake` USDC: player 1 on `createGame`, player 2
+ * on `joinGame`. The game itself is played off-chain. When it ends the server
+ * settles once with `settleGame`, splitting the pot between the two players.
+ *
+ * Player escape hatches that never need the server:
+ *  - `withdrawUnjoined`: player 1 takes their stake back while nobody has joined.
+ *  - `claimTimeout`: either player refunds both stakes if the server has not
+ *    settled within `SETTLEMENT_TIMEOUT` of the game becoming active.
+ *
+ * The contract has no external dependencies beyond the local `IERC20`.
+ * `usdcToken` is immutable; `serverAddress` is rotatable by the owner.
  */
 contract GameEscrow {
-    IERC20 public immutable usdcToken;
-    address public immutable serverAddress;
-    
-    // Reentrancy guard
-    bool private locked;
-    
-    // Game state structure
+    // ------------------------------------------------------------------
+    // Types
+    // ------------------------------------------------------------------
+
+    /// @notice Lifecycle of a game. `None` means the id has never been used.
+    enum Status {
+        None,
+        Created,
+        Active,
+        Settled,
+        Cancelled,
+        TimedOut
+    }
+
+    /// @notice Per-game escrow record.
     struct Game {
+        /// @dev Creator; funds `stake` on `createGame`.
         address player1;
+        /// @dev Joiner; funds `stake` on `joinGame`. Zero until joined.
         address player2;
+        /// @dev Per-player stake in USDC base units (6 decimals).
         uint256 stake;
-        uint256 player1Deposits;
-        uint256 player2Deposits;
-        bool isActive;
-        bool isCancelled;
+        /// @dev Funds currently held for this game; zeroed on every exit path.
+        uint256 totalDeposits;
+        /// @dev Current lifecycle status.
+        Status status;
+        /// @dev Block timestamp of `createGame`.
+        uint64 createdAt;
+        /// @dev Block timestamp of `joinGame`; zero until joined.
+        uint64 activatedAt;
     }
-    
-    // Mapping from gameId (bytes32 hash of server game ID) to Game
+
+    // ------------------------------------------------------------------
+    // Storage
+    // ------------------------------------------------------------------
+
+    /// @notice The USDC token this escrow holds.
+    IERC20 public immutable usdcToken;
+
+    /// @notice Account allowed to rotate the server address and transfer ownership.
+    address public owner;
+
+    /// @notice Account allowed to settle and cancel games.
+    address public serverAddress;
+
+    /// @notice How long after activation players must wait before `claimTimeout`.
+    uint256 public constant SETTLEMENT_TIMEOUT = 7 days;
+
+    /// @notice Escrow records keyed by `keccak256(abi.encodePacked(serverGameId))`.
     mapping(bytes32 => Game) public games;
-    
-    // Mapping from server game ID string to bytes32 gameId
-    mapping(string => bytes32) public serverGameIdToGameId;
-    
+
+    /// @dev Reentrancy lock: 1 = unlocked, 2 = locked.
+    uint256 private _lock = 1;
+
+    // ------------------------------------------------------------------
     // Events
-    event GameCreated(
-        bytes32 indexed gameId,
-        string indexed serverGameId,
-        address indexed player1,
-        uint256 stake
-    );
-    
-    event PlayerJoined(
-        bytes32 indexed gameId,
-        address indexed player2,
-        uint256 stake
-    );
-    
-    event BetDeposited(
-        bytes32 indexed gameId,
-        address indexed player,
-        uint256 amount
-    );
-    
-    event WinnerPaid(
-        bytes32 indexed gameId,
-        address indexed winner,
-        uint256 amount
-    );
-    
-    event GameCancelled(
-        bytes32 indexed gameId,
-        address indexed player1,
-        address indexed player2,
-        uint256 refund1,
-        uint256 refund2
-    );
-    
+    // ------------------------------------------------------------------
+
+    /// @notice Emitted when player 1 creates and funds a game.
+    event GameCreated(bytes32 indexed gameId, string serverGameId, address indexed player1, uint256 stake);
+
+    /// @notice Emitted when player 2 joins and funds a game.
+    event PlayerJoined(bytes32 indexed gameId, address indexed player2);
+
+    /// @notice Emitted when the server settles a game.
+    event GameSettled(bytes32 indexed gameId, uint256 player1Amount, uint256 player2Amount);
+
+    /// @notice Emitted when a game is cancelled (by the server, or by player 1 via `withdrawUnjoined`).
+    event GameCancelled(bytes32 indexed gameId, uint256 refund1, uint256 refund2);
+
+    /// @notice Emitted when a player claims the settlement timeout.
+    event GameTimedOut(bytes32 indexed gameId, address indexed claimant);
+
+    /// @notice Emitted when the server address changes (also once at construction).
+    event ServerAddressUpdated(address indexed previous, address indexed current);
+
+    /// @notice Emitted when ownership changes (also once at construction).
+    event OwnershipTransferred(address indexed previous, address indexed current);
+
+    // ------------------------------------------------------------------
     // Modifiers
+    // ------------------------------------------------------------------
+
+    /// @dev Restricts a function to the owner.
+    modifier onlyOwner() {
+        require(msg.sender == owner, "GameEscrow: caller is not the owner");
+        _;
+    }
+
+    /// @dev Restricts a function to the server.
     modifier onlyServer() {
-        require(msg.sender == serverAddress, "Only server can call this");
+        require(msg.sender == serverAddress, "GameEscrow: caller is not the server");
         _;
     }
-    
-    modifier gameExists(bytes32 gameId) {
-        require(games[gameId].player1 != address(0), "Game does not exist");
-        _;
-    }
-    
-    modifier gameActive(bytes32 gameId) {
-        require(games[gameId].isActive, "Game is not active");
-        require(!games[gameId].isCancelled, "Game is cancelled");
-        _;
-    }
-    
+
+    /// @dev Simple mutex against reentrancy through the token.
     modifier nonReentrant() {
-        require(!locked, "ReentrancyGuard: reentrant call");
-        locked = true;
+        require(_lock == 1, "ReentrancyGuard: reentrant call");
+        _lock = 2;
         _;
-        locked = false;
+        _lock = 1;
     }
-    
+
+    // ------------------------------------------------------------------
+    // Constructor
+    // ------------------------------------------------------------------
+
     /**
-     * @dev Constructor
-     * @param _usdcToken Address of USDC token contract
-     * @param _serverAddress Address authorized to call payout/cancel functions
+     * @param _usdcToken Address of the USDC token contract.
+     * @param _serverAddress Account authorised to settle and cancel games.
      */
     constructor(address _usdcToken, address _serverAddress) {
-        require(_usdcToken != address(0), "Invalid USDC address");
-        require(_serverAddress != address(0), "Invalid server address");
+        require(_usdcToken != address(0), "GameEscrow: invalid USDC address");
+        require(_serverAddress != address(0), "GameEscrow: invalid server address");
         usdcToken = IERC20(_usdcToken);
+        owner = msg.sender;
         serverAddress = _serverAddress;
+        emit OwnershipTransferred(address(0), msg.sender);
+        emit ServerAddressUpdated(address(0), _serverAddress);
     }
-    
+
+    // ------------------------------------------------------------------
+    // Player writes
+    // ------------------------------------------------------------------
+
     /**
-     * @dev Create a new game and escrow initial stake from player 1
-     * @param serverGameId Server-side game ID (string)
-     * @param stake Initial stake amount (in USDC, with 6 decimals)
-     * @return gameId The on-chain game ID (bytes32)
+     * @notice Create a game and escrow player 1's stake.
+     * @dev Caller must have approved this contract for at least `stake`.
+     * @param serverGameId The server-side game id; hashed to derive `gameId`.
+     * @param stake Per-player stake in USDC base units. Must be non-zero.
+     * @return gameId `keccak256(abi.encodePacked(serverGameId))`.
      */
-    function createGame(
-        string memory serverGameId,
-        uint256 stake
-    ) external returns (bytes32) {
-        require(msg.sender != address(0), "Invalid player address");
-        require(stake > 0, "Stake must be greater than 0");
-        
-        // Generate gameId from server game ID
-        bytes32 gameId = keccak256(abi.encodePacked(serverGameId));
-        
-        // Check if game already exists
-        require(games[gameId].player1 == address(0), "Game already exists");
-        
-        // Store mapping
-        serverGameIdToGameId[serverGameId] = gameId;
-        
-        // Transfer stake from player 1
-        require(
-            usdcToken.transferFrom(msg.sender, address(this), stake),
-            "Failed to transfer stake from player1"
-        );
-        
-        // Create game state (player2 will be set when they join)
-        games[gameId] = Game({
-            player1: msg.sender,
-            player2: address(0),
-            stake: stake,
-            player1Deposits: stake,
-            player2Deposits: 0,
-            isActive: false, // Not active until player2 joins
-            isCancelled: false
-        });
-        
+    function createGame(string calldata serverGameId, uint256 stake) external nonReentrant returns (bytes32 gameId) {
+        require(stake > 0, "GameEscrow: stake must be greater than zero");
+        gameId = getGameIdFromServerId(serverGameId);
+        Game storage game = games[gameId];
+        require(game.status == Status.None, "GameEscrow: game already exists");
+
+        game.player1 = msg.sender;
+        game.stake = stake;
+        game.totalDeposits = stake;
+        game.status = Status.Created;
+        game.createdAt = uint64(block.timestamp);
+
+        require(usdcToken.transferFrom(msg.sender, address(this), stake), "GameEscrow: stake transfer failed");
+
         emit GameCreated(gameId, serverGameId, msg.sender, stake);
-        
-        return gameId;
     }
-    
+
     /**
-     * @dev Join an existing game and deposit stake from player 2
-     * @param gameId The on-chain game ID
+     * @notice Join a created game as player 2 and escrow the matching stake.
+     * @dev Status and self-join are checked before any transfer, so a caller
+     *      who loses the race to join never pays.
+     * @param gameId The on-chain game id.
      */
-    function joinGame(bytes32 gameId) external gameExists(gameId) {
+    function joinGame(bytes32 gameId) external nonReentrant {
         Game storage game = games[gameId];
-        require(game.player2 == address(0), "Game already has two players");
-        require(msg.sender != game.player1, "Cannot join as player1");
-        require(!game.isCancelled, "Game is cancelled");
-        
-        // Transfer stake from player 2
-        require(
-            usdcToken.transferFrom(msg.sender, address(this), game.stake),
-            "Failed to transfer stake from player2"
-        );
-        
-        // Update game state
+        require(game.status == Status.Created, "GameEscrow: game is not open to join");
+        require(msg.sender != game.player1, "GameEscrow: cannot join your own game");
+
+        uint256 stake = game.stake;
         game.player2 = msg.sender;
-        game.player2Deposits = game.stake;
-        game.isActive = true;
-        
-        emit PlayerJoined(gameId, msg.sender, game.stake);
+        game.totalDeposits += stake;
+        game.status = Status.Active;
+        game.activatedAt = uint64(block.timestamp);
+
+        require(usdcToken.transferFrom(msg.sender, address(this), stake), "GameEscrow: stake transfer failed");
+
+        emit PlayerJoined(gameId, msg.sender);
     }
-    
+
     /**
-     * @dev Deposit additional bet amount during game
-     * @param gameId The on-chain game ID
-     * @param amount Amount to deposit (in USDC, with 6 decimals)
+     * @notice Player 1 withdraws their stake from a game nobody has joined.
+     * @param gameId The on-chain game id.
      */
-    function depositBet(bytes32 gameId, uint256 amount) external nonReentrant gameExists(gameId) gameActive(gameId) {
+    function withdrawUnjoined(bytes32 gameId) external nonReentrant {
         Game storage game = games[gameId];
+        require(game.status == Status.Created, "GameEscrow: game is not awaiting a player");
+        require(msg.sender == game.player1, "GameEscrow: caller is not player1");
+
+        uint256 refund = game.totalDeposits;
+        game.totalDeposits = 0;
+        game.status = Status.Cancelled;
+
+        require(usdcToken.transfer(game.player1, refund), "GameEscrow: refund transfer failed");
+
+        emit GameCancelled(gameId, refund, 0);
+    }
+
+    /**
+     * @notice Either player refunds both stakes if the server has not settled
+     *         within `SETTLEMENT_TIMEOUT` of activation.
+     * @param gameId The on-chain game id.
+     */
+    function claimTimeout(bytes32 gameId) external nonReentrant {
+        Game storage game = games[gameId];
+        require(game.status == Status.Active, "GameEscrow: game is not active");
+        require(msg.sender == game.player1 || msg.sender == game.player2, "GameEscrow: caller is not a player");
         require(
-            msg.sender == game.player1 || msg.sender == game.player2,
-            "Only players can deposit bets"
+            block.timestamp > uint256(game.activatedAt) + SETTLEMENT_TIMEOUT,
+            "GameEscrow: settlement timeout not reached"
         );
-        require(amount > 0, "Amount must be greater than 0");
-        
-        // Transfer USDC from player
-        require(
-            usdcToken.transferFrom(msg.sender, address(this), amount),
-            "Failed to transfer bet"
-        );
-        
-        // Update deposits
-        if (msg.sender == game.player1) {
-            game.player1Deposits += amount;
-        } else {
-            game.player2Deposits += amount;
+
+        uint256 stake = game.stake;
+        game.totalDeposits = 0;
+        game.status = Status.TimedOut;
+
+        require(usdcToken.transfer(game.player1, stake), "GameEscrow: refund transfer failed");
+        require(usdcToken.transfer(game.player2, stake), "GameEscrow: refund transfer failed");
+
+        emit GameTimedOut(gameId, msg.sender);
+    }
+
+    // ------------------------------------------------------------------
+    // Server writes
+    // ------------------------------------------------------------------
+
+    /**
+     * @notice Settle an active game, paying each player their share of the pot.
+     * @dev `player1Amount + player2Amount` must equal the game's `totalDeposits`.
+     *      Zero-amount transfers are skipped.
+     * @param gameId The on-chain game id.
+     * @param player1Amount Payout to player 1 in USDC base units.
+     * @param player2Amount Payout to player 2 in USDC base units.
+     */
+    function settleGame(bytes32 gameId, uint256 player1Amount, uint256 player2Amount) external onlyServer nonReentrant {
+        Game storage game = games[gameId];
+        require(game.status == Status.Active, "GameEscrow: game is not active");
+        require(player1Amount + player2Amount == game.totalDeposits, "GameEscrow: amounts do not match deposits");
+
+        game.totalDeposits = 0;
+        game.status = Status.Settled;
+
+        if (player1Amount > 0) {
+            require(usdcToken.transfer(game.player1, player1Amount), "GameEscrow: payout transfer failed");
         }
-        
-        emit BetDeposited(gameId, msg.sender, amount);
-    }
-    
-    /**
-     * @dev Payout winner (only callable by server)
-     * @param gameId The on-chain game ID
-     * @param winner Address of the winner
-     * @param amount Total amount to payout (in USDC, with 6 decimals)
-     */
-    function payoutWinner(
-        bytes32 gameId,
-        address winner,
-        uint256 amount
-    ) external onlyServer nonReentrant gameExists(gameId) gameActive(gameId) {
-        Game storage game = games[gameId];
-        require(
-            winner == game.player1 || winner == game.player2,
-            "Winner must be a player"
-        );
-        require(amount > 0, "Amount must be greater than 0");
-        
-        uint256 totalDeposits = game.player1Deposits + game.player2Deposits;
-        require(amount <= totalDeposits, "Amount exceeds total deposits");
-        
-        // Mark game as inactive
-        game.isActive = false;
-        
-        // Transfer to winner
-        require(
-            usdcToken.transfer(winner, amount),
-            "Failed to transfer to winner"
-        );
-        
-        emit WinnerPaid(gameId, winner, amount);
-    }
-    
-    /**
-     * @dev Cancel game and refund both players (only callable by server)
-     * @param gameId The on-chain game ID
-     */
-    function cancelGame(bytes32 gameId) external onlyServer nonReentrant gameExists(gameId) {
-        Game storage game = games[gameId];
-        require(!game.isCancelled, "Game already cancelled");
-        
-        // Mark as cancelled
-        game.isCancelled = true;
-        game.isActive = false;
-        
-        // Refund both players
-        uint256 refund1 = game.player1Deposits;
-        uint256 refund2 = game.player2Deposits;
-        
-        if (refund1 > 0) {
-            require(
-                usdcToken.transfer(game.player1, refund1),
-                "Failed to refund player1"
-            );
+        if (player2Amount > 0) {
+            require(usdcToken.transfer(game.player2, player2Amount), "GameEscrow: payout transfer failed");
         }
-        
+
+        emit GameSettled(gameId, player1Amount, player2Amount);
+    }
+
+    /**
+     * @notice Cancel a created or active game and refund each present player their stake.
+     * @param gameId The on-chain game id.
+     */
+    function cancelGame(bytes32 gameId) external onlyServer nonReentrant {
+        Game storage game = games[gameId];
+        require(game.status == Status.Created || game.status == Status.Active, "GameEscrow: game cannot be cancelled");
+
+        uint256 stake = game.stake;
+        address player2 = game.player2;
+        uint256 refund1 = stake;
+        uint256 refund2 = player2 != address(0) ? stake : 0;
+
+        game.totalDeposits = 0;
+        game.status = Status.Cancelled;
+
+        require(usdcToken.transfer(game.player1, refund1), "GameEscrow: refund transfer failed");
         if (refund2 > 0) {
-            require(
-                usdcToken.transfer(game.player2, refund2),
-                "Failed to refund player2"
-            );
+            require(usdcToken.transfer(player2, refund2), "GameEscrow: refund transfer failed");
         }
-        
-        emit GameCancelled(gameId, game.player1, game.player2, refund1, refund2);
+
+        emit GameCancelled(gameId, refund1, refund2);
     }
-    
+
+    // ------------------------------------------------------------------
+    // Owner writes
+    // ------------------------------------------------------------------
+
     /**
-     * @dev Get total balance escrowed for a game
-     * @param gameId The on-chain game ID
-     * @return Total amount escrowed
+     * @notice Rotate the server account.
+     * @param newServer The new server address. Must be non-zero.
      */
-    function getGameBalance(bytes32 gameId) external view gameExists(gameId) returns (uint256) {
-        Game memory game = games[gameId];
-        return game.player1Deposits + game.player2Deposits;
+    function setServerAddress(address newServer) external onlyOwner nonReentrant {
+        require(newServer != address(0), "GameEscrow: invalid server address");
+        address previous = serverAddress;
+        serverAddress = newServer;
+        emit ServerAddressUpdated(previous, newServer);
     }
-    
+
     /**
-     * @dev Get game details
-     * @param gameId The on-chain game ID
-     * @return Game struct
+     * @notice Transfer contract ownership.
+     * @param newOwner The new owner. Must be non-zero.
      */
-    function getGame(bytes32 gameId) external view gameExists(gameId) returns (Game memory) {
+    function transferOwnership(address newOwner) external onlyOwner nonReentrant {
+        require(newOwner != address(0), "GameEscrow: invalid owner address");
+        address previous = owner;
+        owner = newOwner;
+        emit OwnershipTransferred(previous, newOwner);
+    }
+
+    // ------------------------------------------------------------------
+    // Reads
+    // ------------------------------------------------------------------
+
+    /**
+     * @notice Read a game record. Returns an all-zero struct for unknown ids.
+     * @param gameId The on-chain game id.
+     * @return The game record.
+     */
+    function getGame(bytes32 gameId) external view returns (Game memory) {
         return games[gameId];
     }
-    
+
     /**
-     * @dev Get gameId from server game ID string
-     * @param serverGameId Server-side game ID
-     * @return gameId The on-chain game ID
+     * @notice Derive the on-chain game id from the server-side id.
+     * @param serverGameId The server-side game id.
+     * @return `keccak256(abi.encodePacked(serverGameId))`.
      */
-    function getGameIdFromServerId(string memory serverGameId) external view returns (bytes32) {
-        return serverGameIdToGameId[serverGameId];
+    function getGameIdFromServerId(string calldata serverGameId) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(serverGameId));
     }
 }

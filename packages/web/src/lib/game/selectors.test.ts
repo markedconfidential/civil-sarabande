@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { GameStateView } from '@civil-sarabande/shared';
+import { HIDDEN_MOVE, type GameStateView } from '@civil-sarabande/shared';
 import {
 	calculateScores,
 	canEndRound,
@@ -11,7 +11,10 @@ import {
 	getAmountToCall,
 	getAssignedRows,
 	getCellClasses,
-	getChosenColumns
+	getChosenColumns,
+	getTheirKnownColumns,
+	getTheirRevealedColumn,
+	isHidden
 } from './selectors';
 
 // A 6x6 board where cell (row, col) = row * 10 + col, so scores are easy to read.
@@ -38,7 +41,20 @@ function makeGame(overrides: Partial<GameStateView> = {}): GameStateView {
 		theirEndedRound: false,
 		yourMoves: [],
 		theirMoves: [],
+		theirRevealedColumn: null,
 		yourRole: 'player1',
+		phaseDeadline: null,
+		yourTurn: false,
+		roundResult: null,
+		escrow: {
+			status: 'active',
+			contractGameId: '0x00',
+			stakeUnits: '0',
+			payoutTxHash: null,
+			yourPayout: null,
+			theirPayout: null,
+			error: null
+		},
 		...overrides
 	};
 }
@@ -102,6 +118,85 @@ describe('calculateScores', () => {
 
 	test('returns zero with no moves', () => {
 		expect(calculateScores(makeGame())).toEqual({ yourScore: 0, theirScore: 0 });
+	});
+
+	test('theirScore is null while a needed opponent column is hidden', () => {
+		// Opponent's column is masked; you assigned them row 0. Your score is unaffected.
+		const game = makeGame({
+			yourRole: 'player1',
+			yourMoves: [2, 0],
+			theirMoves: [HIDDEN_MOVE, 1]
+		});
+		const scores = calculateScores(game);
+		expect(scores.yourScore).toBe(4 * 10 + 2);
+		expect(scores.theirScore).toBeNull();
+	});
+
+	test('theirScore is null when a later column is hidden even if earlier ones are known', () => {
+		const game = makeGame({
+			yourRole: 'player1',
+			yourMoves: [2, 0, 4, 1],
+			theirMoves: [3, 1, HIDDEN_MOVE, 2]
+		});
+		expect(calculateScores(game).theirScore).toBeNull();
+	});
+
+	test('a hidden column that is not yet scored does not null the score', () => {
+		// Their second column is hidden but you have not assigned a second row yet.
+		const game = makeGame({
+			yourRole: 'player1',
+			yourMoves: [2, 0],
+			theirMoves: [3, 1, HIDDEN_MOVE]
+		});
+		expect(calculateScores(game).theirScore).toBe(0 * 10 + 2);
+	});
+
+	test('scores resolve once the round ends and columns are revealed', () => {
+		const game = makeGame({
+			yourRole: 'player1',
+			phase: 'roundEnd',
+			yourMoves: [2, 0],
+			theirMoves: [3, 1]
+		});
+		expect(calculateScores(game).theirScore).toBe(0 * 10 + 2);
+	});
+});
+
+describe('hidden information', () => {
+	test('isHidden recognises the sentinel only', () => {
+		expect(isHidden(HIDDEN_MOVE)).toBe(true);
+		expect(isHidden(0)).toBe(false);
+		expect(isHidden(undefined)).toBe(false);
+		expect(isHidden(null)).toBe(false);
+	});
+
+	test('assigned rows stay public when columns are masked', () => {
+		const game = makeGame({ theirMoves: [HIDDEN_MOVE, 1, HIDDEN_MOVE, 2, HIDDEN_MOVE, 4] });
+		expect(getAssignedRows(game)).toEqual([1, 2, 4]);
+		expect(getTheirKnownColumns(game)).toEqual([]);
+	});
+
+	test('getTheirKnownColumns drops hidden entries', () => {
+		const game = makeGame({ theirMoves: [3, 1, HIDDEN_MOVE, 2, 0, 4] });
+		expect(getTheirKnownColumns(game)).toEqual([3, 0]);
+	});
+
+	test('getTheirRevealedColumn is null until both have revealed', () => {
+		expect(getTheirRevealedColumn(makeGame({ theirMoves: [3, 1, 5, 2, 0, 4] }))).toBeNull();
+		expect(
+			getTheirRevealedColumn(makeGame({ theirMoves: [3, 1, 5, 2, 0, 4, HIDDEN_MOVE] }))
+		).toBeNull();
+	});
+
+	test('getTheirRevealedColumn maps the revealed column into board orientation', () => {
+		// Player 1 viewer: the opponent (P2) stores mirrored columns.
+		expect(getTheirRevealedColumn(makeGame({ yourRole: 'player1', theirRevealedColumn: 3 }))).toBe(2);
+		// Player 2 viewer: the opponent (P1) stores direct columns.
+		expect(getTheirRevealedColumn(makeGame({ yourRole: 'player2', theirRevealedColumn: 3 }))).toBe(3);
+		// Falls back to move 6 when the server field is null.
+		expect(
+			getTheirRevealedColumn(makeGame({ yourRole: 'player1', theirMoves: [3, 1, 5, 2, 0, 4, 5] }))
+		).toBe(0);
 	});
 });
 
@@ -171,5 +266,14 @@ describe('getCellClasses', () => {
 		expect(getCellClasses(game, 5, 0, preview)).toBe('preview-row');
 		expect(getCellClasses(game, 0, 2, preview)).toBe('your-column');
 		expect(getCellClasses(game, 1, 2, { column: 2, row: 1 })).toBe('scored preview-intersection');
+	});
+
+	test('never treats a hidden opponent column as a column', () => {
+		const hidden = makeGame({ yourMoves: [2, 0], theirMoves: [HIDDEN_MOVE, 1] });
+		// Row 1 is theirs; no column of theirs is highlighted, and nothing odd
+		// happens for the sentinel index.
+		expect(getCellClasses(hidden, 1, 0)).toBe('their-row');
+		expect(getCellClasses(hidden, 0, 5)).toBe('');
+		expect(getCellClasses(hidden, 1, 2)).toBe('scored');
 	});
 });

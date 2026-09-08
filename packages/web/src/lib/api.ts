@@ -2,257 +2,275 @@
  * REST API Client
  *
  * Functions to interact with the Civil Sarabande game server API.
- * All authenticated requests use Privy access tokens.
+ * Authenticated requests carry the bearer token from `getAccessToken()`
+ * (a Privy access token or `dev:<userId>` in dev mode).
+ *
+ * Every game action resolves to the `GameStateView` the server returned, so
+ * callers can apply it to local state immediately without waiting for the
+ * WebSocket broadcast.
  */
 
 import type {
-	CreateGameResponse,
+	ClientConfigResponse,
+	ConfirmFundingRequest,
+	CreateGameRequest,
+	ErrorResponse,
+	FaucetRequest,
+	GameResponse,
+	GameStateView,
+	JoinGameRequest,
+	MakeBetRequest,
+	MakeMoveRequest,
+	MyGameResponse,
+	RevealMoveRequest,
+	SetWalletRequest,
 	SuccessResponse,
 	WaitingGamesResponse,
-	GameStateView,
-	ErrorResponse
+	WalletBalanceResponse
 } from '@civil-sarabande/shared';
-import { getAccessToken } from './privy';
+import { config } from './config';
+import { getAccessToken } from './auth';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+/** Error thrown for non-2xx responses; carries the HTTP status. */
+export class ApiError extends Error {
+	readonly status: number;
+	readonly endpoint: string;
 
-/**
- * Make a public fetch request (no authentication required).
- * Used for endpoints that don't need user authentication.
- */
-async function publicRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-	const url = `${API_BASE_URL}${endpoint}`;
-	const headers: HeadersInit = {
-		'Content-Type': 'application/json',
-		...options.headers
-	};
-
-	const response = await fetch(url, {
-		...options,
-		headers
-	});
-
-	if (!response.ok) {
-		const error: ErrorResponse = await response.json().catch(() => ({
-			error: `HTTP ${response.status}: ${response.statusText}`
-		}));
-		throw new Error(error.error || `HTTP ${response.status}`);
+	constructor(message: string, status: number, endpoint: string) {
+		super(message);
+		this.name = 'ApiError';
+		this.status = status;
+		this.endpoint = endpoint;
 	}
-
-	return response.json();
 }
 
-/**
- * Make a fetch request and handle errors.
- * Automatically includes Privy access token for authentication.
- */
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-	const url = `${API_BASE_URL}${endpoint}`;
-
-	// Get access token for authenticated requests
-	const token = await getAccessToken();
-	const headers: HeadersInit = {
-		'Content-Type': 'application/json',
-		...options.headers
-	};
-
-	if (token) {
-		(headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
-	}
-
-	const response = await fetch(url, {
-		...options,
-		headers
-	});
-
-	if (!response.ok) {
-		const error: ErrorResponse = await response.json().catch(() => ({
-			error: `HTTP ${response.status}: ${response.statusText}`
-		}));
-		throw new Error(error.error || `HTTP ${response.status}`);
-	}
-
-	return response.json();
+export function isApiError(err: unknown, status?: number): err is ApiError {
+	return err instanceof ApiError && (status === undefined || err.status === status);
 }
 
-/**
- * Create a new game.
- * User info is extracted from the authentication token on the server.
- *
- * @param stake - The stake amount for the game
- * @returns The created game state
- */
-export async function createGame(stake: number): Promise<GameStateView> {
-	const response: CreateGameResponse = await request<CreateGameResponse>('/games', {
-		method: 'POST',
-		body: JSON.stringify({ stake })
-	});
+/** The user profile as returned by /users/me and /users/username. */
+export interface UserProfile {
+	privyUserId: string;
+	username: string | null;
+	walletAddress: string | null;
+	needsUsername: boolean;
+	createdAt?: number;
+}
 
+interface UserResponse {
+	user: UserProfile;
+}
+
+export interface UsernameAvailability {
+	available: boolean;
+	username?: string;
+	reason?: string;
+}
+
+async function parseError(response: Response, endpoint: string): Promise<ApiError> {
+	const fallback = `HTTP ${response.status}: ${response.statusText}`;
+	const body: Partial<ErrorResponse> | null = await response.json().catch(() => null);
+	return new ApiError(body?.error || fallback, response.status, endpoint);
+}
+
+async function send<T>(
+	endpoint: string,
+	options: RequestInit,
+	authenticated: boolean
+): Promise<T> {
+	const url = `${config.apiUrl}${endpoint}`;
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+		...(options.headers as Record<string, string> | undefined)
+	};
+
+	if (authenticated) {
+		const token = await getAccessToken();
+		if (!token) {
+			throw new ApiError('Not signed in', 401, endpoint);
+		}
+		headers['Authorization'] = `Bearer ${token}`;
+	}
+
+	let response: Response;
+	try {
+		response = await fetch(url, { ...options, headers });
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new ApiError(`Cannot reach the game server at ${config.apiUrl} (${detail})`, 0, endpoint);
+	}
+
+	if (!response.ok) {
+		throw await parseError(response, endpoint);
+	}
+
+	return response.json() as Promise<T>;
+}
+
+/** Public request (no bearer token). */
+function publicRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+	return send<T>(endpoint, options, false);
+}
+
+/** Authenticated request; throws ApiError(401) when there is no token. */
+function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+	return send<T>(endpoint, options, true);
+}
+
+function post<T>(endpoint: string, body: unknown = {}, authenticated = true): Promise<T> {
+	return send<T>(endpoint, { method: 'POST', body: JSON.stringify(body) }, authenticated);
+}
+
+/** Game routes answer `{ game }` or `{ success, game }`; both carry the view. */
+function gameOf(response: GameResponse | SuccessResponse): GameStateView {
+	if (!response || typeof response !== 'object' || !('game' in response) || !response.game) {
+		throw new ApiError('Server response did not include a game', 502, 'game');
+	}
 	return response.game;
 }
 
-/**
- * List all games waiting for a second player.
- * This is a public endpoint that doesn't require authentication.
- * 
- * @returns List of waiting games
- */
-export async function listWaitingGames(): Promise<WaitingGamesResponse['games']> {
-	const response: WaitingGamesResponse = await publicRequest<WaitingGamesResponse>(
-		'/games/waiting',
-		{
-			method: 'GET'
-		}
-	);
+// ============================================================================
+// Server configuration
+// ============================================================================
 
+/** GET /config — what the server thinks the chain, contracts and auth mode are. */
+export function getConfig(): Promise<ClientConfigResponse> {
+	return publicRequest<ClientConfigResponse>('/config', { method: 'GET' });
+}
+
+// ============================================================================
+// Users
+// ============================================================================
+
+/** GET /users/me — creates the user record on first call. */
+export async function getMe(): Promise<UserProfile> {
+	const response = await request<UserResponse>('/users/me', { method: 'GET' });
+	return response.user;
+}
+
+/** POST /users/username */
+export async function setUsername(username: string): Promise<UserProfile> {
+	const response = await post<UserResponse>('/users/username', { username });
+	return response.user;
+}
+
+/** GET /users/username/:username — public availability check. */
+export function checkUsername(username: string): Promise<UsernameAvailability> {
+	return publicRequest<UsernameAvailability>(`/users/username/${encodeURIComponent(username)}`, {
+		method: 'GET'
+	});
+}
+
+/** POST /users/wallet — link a wallet address to the current user. */
+export async function setWallet(walletAddress: string): Promise<UserProfile> {
+	const body: SetWalletRequest = { walletAddress };
+	const response = await post<UserResponse>('/users/wallet', body);
+	return response.user;
+}
+
+/** GET /wallet/balance — the server's view of the user's USDC balance. */
+export function getWalletBalance(): Promise<WalletBalanceResponse> {
+	return request<WalletBalanceResponse>('/wallet/balance', { method: 'GET' });
+}
+
+/** POST /dev/faucet — mint MockUSDC (dev auth mode only; 404 otherwise). */
+export function faucet(address: string, amount: number): Promise<unknown> {
+	const body: FaucetRequest = { address, amount };
+	return post<unknown>('/dev/faucet', body);
+}
+
+// ============================================================================
+// Games
+// ============================================================================
+
+/** POST /games — creates an unfunded game; player 1 must then fund escrow. */
+export async function createGame(stake: number): Promise<GameStateView> {
+	const body: CreateGameRequest = { stake };
+	return gameOf(await post<GameResponse>('/games', body));
+}
+
+/** GET /games/waiting — funded games open to join (public). */
+export async function listWaitingGames(): Promise<WaitingGamesResponse['games']> {
+	const response = await publicRequest<WaitingGamesResponse>('/games/waiting', { method: 'GET' });
 	return response.games;
 }
 
-/**
- * Get the current state of a game.
- * User is identified by authentication token.
- *
- * @param gameId - The game ID
- * @returns The game state view for the current player
- */
+/** GET /games/mine — the caller's most recent unfinished game, or null. */
+export async function getMyGame(): Promise<GameStateView | null> {
+	const response = await request<MyGameResponse>('/games/mine', { method: 'GET' });
+	return response.game ?? null;
+}
+
+/** GET /games/:id */
 export async function getGame(gameId: string): Promise<GameStateView> {
-	const response: { game: GameStateView } = await request<{ game: GameStateView }>(
-		`/games/${gameId}`,
-		{
-			method: 'GET'
-		}
-	);
-
-	return response.game;
+	return gameOf(await request<GameResponse>(`/games/${gameId}`, { method: 'GET' }));
 }
 
 /**
- * Join an existing game.
- * User info is extracted from the authentication token on the server.
- *
- * @param gameId - The game ID to join
- * @returns The updated game state
+ * POST /games/:id/confirm-funding — player 1 reports that createGame is
+ * mined. The server verifies the escrow on chain; the hash is informational.
  */
-export async function joinGame(gameId: string): Promise<GameStateView> {
-	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/join`, {
-		method: 'POST',
-		body: JSON.stringify({})
-	});
-
-	return response.game;
+export async function confirmFunding(gameId: string, txHash?: string): Promise<GameStateView> {
+	const body: ConfirmFundingRequest = txHash ? { txHash } : {};
+	return gameOf(await post<GameResponse | SuccessResponse>(`/games/${gameId}/confirm-funding`, body));
 }
 
 /**
- * Make a move in the game.
- *
- * @param gameId - The game ID
- * @param selfColumn - Column the player chooses for themselves (0-5)
- * @param otherRow - Row the player assigns to their opponent (0-5)
- * @returns The updated game state
+ * POST /games/:id/join — call after joinGame is mined on chain. The server
+ * verifies the escrow shows you as player 2. Safe to retry.
  */
+export async function joinGame(gameId: string, txHash?: string): Promise<GameStateView> {
+	const body: JoinGameRequest = txHash ? { txHash } : {};
+	return gameOf(await post<GameResponse | SuccessResponse>(`/games/${gameId}/join`, body));
+}
+
+/**
+ * POST /games/:id/cancel — player 1 only, while waiting. Unfunded games are
+ * deleted; funded games are refunded by the server and end.
+ */
+export async function cancelGame(gameId: string): Promise<GameStateView | null> {
+	const response = await post<Partial<GameResponse & SuccessResponse>>(`/games/${gameId}/cancel`);
+	return response?.game ?? null;
+}
+
+/** POST /games/:id/move */
 export async function makeMove(
 	gameId: string,
 	selfColumn: number,
 	otherRow: number
 ): Promise<GameStateView> {
-	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/move`, {
-		method: 'POST',
-		body: JSON.stringify({ selfColumn, otherRow })
-	});
-
-	return response.game;
+	const body: MakeMoveRequest = { selfColumn, otherRow };
+	return gameOf(await post<SuccessResponse>(`/games/${gameId}/move`, body));
 }
 
-/**
- * Place a bet.
- *
- * @param gameId - The game ID
- * @param amount - Number of coins to add to the pot
- * @returns The updated game state
- */
+/** POST /games/:id/bet */
 export async function makeBet(gameId: string, amount: number): Promise<GameStateView> {
-	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/bet`, {
-		method: 'POST',
-		body: JSON.stringify({ amount })
-	});
-
-	return response.game;
+	const body: MakeBetRequest = { amount };
+	return gameOf(await post<SuccessResponse>(`/games/${gameId}/bet`, body));
 }
 
-/**
- * Fold the current betting round.
- *
- * @param gameId - The game ID
- * @returns The updated game state
- */
+/** POST /games/:id/fold */
 export async function foldBet(gameId: string): Promise<GameStateView> {
-	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/fold`, {
-		method: 'POST',
-		body: JSON.stringify({})
-	});
-
-	return response.game;
+	return gameOf(await post<SuccessResponse>(`/games/${gameId}/fold`));
 }
 
-/**
- * Make a reveal move (choose which column to score).
- *
- * @param gameId - The game ID
- * @param revealColumn - Which of the 3 columns to reveal (must be one you chose)
- * @returns The updated game state
- */
+/** POST /games/:id/reveal */
 export async function makeRevealMove(gameId: string, revealColumn: number): Promise<GameStateView> {
-	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/reveal`, {
-		method: 'POST',
-		body: JSON.stringify({ revealColumn })
-	});
-
-	return response.game;
+	const body: RevealMoveRequest = { revealColumn };
+	return gameOf(await post<SuccessResponse>(`/games/${gameId}/reveal`, body));
 }
 
-/**
- * Signal that you're ready to end the round.
- *
- * @param gameId - The game ID
- * @returns The updated game state
- */
+/** POST /games/:id/end-round */
 export async function endRound(gameId: string): Promise<GameStateView> {
-	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/end-round`, {
-		method: 'POST',
-		body: JSON.stringify({})
-	});
-
-	return response.game;
+	return gameOf(await post<SuccessResponse>(`/games/${gameId}/end-round`));
 }
 
-/**
- * Start the next round.
- *
- * @param gameId - The game ID
- * @returns The updated game state
- */
+/** POST /games/:id/next-round */
 export async function startNextRound(gameId: string): Promise<GameStateView> {
-	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/next-round`, {
-		method: 'POST',
-		body: JSON.stringify({})
-	});
-
-	return response.game;
+	return gameOf(await post<SuccessResponse>(`/games/${gameId}/next-round`));
 }
 
-/**
- * Leave a game.
- * User info is extracted from the authentication token on the server.
- *
- * @param gameId - The game ID
- * @returns The updated game state
- */
+/** POST /games/:id/leave */
 export async function leaveGame(gameId: string): Promise<GameStateView> {
-	const response: SuccessResponse = await request<SuccessResponse>(`/games/${gameId}/leave`, {
-		method: 'POST',
-		body: JSON.stringify({})
-	});
-
-	return response.game;
+	return gameOf(await post<SuccessResponse>(`/games/${gameId}/leave`));
 }
-

@@ -1,14 +1,27 @@
 /**
- * Privy Integration Utilities
+ * Sign-in entry points.
  *
- * Helper functions for interacting with Privy from Svelte components.
+ * In privy mode these open/close the Privy modal. In dev mode they route to
+ * the dev-login page (and clear the remembered dev identity on logout), so
+ * pages can call `login()` / `logout()` without knowing which mode is active.
+ *
+ * Tokens come from `getAccessToken` in `$lib/auth`; there is no token helper
+ * here any more.
  */
 
+import { goto } from '$app/navigation';
+import { config } from '$lib/config';
+import { authStore } from '$lib/auth';
+
 /**
- * Open the Privy login modal.
+ * Open the Privy login modal, or go to the dev-login page in dev mode.
  * No-op if Privy is not yet initialized.
  */
 export function login(): void {
+	if (config.authMode === 'dev') {
+		void goto('/dev-login');
+		return;
+	}
 	const privyLogin = window.__privyLogin;
 	if (privyLogin) {
 		privyLogin();
@@ -20,26 +33,17 @@ export function login(): void {
  * Log out the current user.
  * Resolves immediately if Privy is not yet initialized.
  */
-export function logout(): Promise<void> {
+export async function logout(): Promise<void> {
+	if (config.authMode === 'dev') {
+		authStore.logout();
+		await goto('/dev-login');
+		return;
+	}
 	const privyLogout = window.__privyLogout;
 	if (privyLogout) {
 		return privyLogout();
 	}
 	// Silently resolve if Privy isn't ready yet
-	return Promise.resolve();
-}
-
-/**
- * Get a fresh access token for API calls.
- * Returns null if Privy is not yet initialized (this is expected during startup).
- */
-export async function getAccessToken(): Promise<string | null> {
-	const privyGetAccessToken = window.__privyGetAccessToken;
-	if (privyGetAccessToken) {
-		return privyGetAccessToken();
-	}
-	// Not an error - Privy just isn't ready yet
-	return null;
 }
 
 // Re-export the mount component
